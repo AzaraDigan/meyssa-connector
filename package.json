@@ -1,0 +1,16 @@
+{
+  "name": "meyssa-connector",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "RecruitCRM to Webflow CMS connector for the Meyssa Legal opportunities page.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test",
+    "sync:local": "node scripts/run-sync-local.js"
+  },
+  "author": "Meyssa Legal",
+  "license": "UNLICENSED"
+}
