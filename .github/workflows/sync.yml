@@ -1,0 +1,50 @@
+name: sync
+
+# Triggers the connector's /api/sync endpoint on a schedule, and on demand.
+#
+# Why GitHub Actions and not Vercel Cron: the Vercel free (Hobby) tier only allows
+# once-per-day cron. This workflow polls every 30 minutes instead, on free runners.
+#
+# Interval: every 30 minutes. GitHub bills each scheduled run as at least 1 minute,
+# so */30 (~1440 runs/month) stays inside a private repo's 2000 free minutes;
+# */15 would not. 30 minutes is within the brief's "15 to 30 minute" window.
+# Note: GitHub may delay scheduled runs under load; a few minutes of drift is fine.
+#
+# Required repo settings (Azara sets these once):
+#   - Variable  SYNC_URL    = the deployed endpoint, e.g. https://<project>.vercel.app/api/sync
+#   - Secret    SYNC_SECRET = the same value stored in Vercel env vars (from Bitwarden)
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Max jobs to sync (optional, leave blank for all; use 3 for a test run)"
+        required: false
+        default: ""
+
+jobs:
+  trigger-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST to /api/sync
+        env:
+          SYNC_URL: ${{ vars.SYNC_URL }}
+          SYNC_SECRET: ${{ secrets.SYNC_SECRET }}
+          LIMIT: ${{ github.event.inputs.limit }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SYNC_URL:-}" ]; then echo "SYNC_URL repo variable is not set"; exit 1; fi
+          url="$SYNC_URL"
+          if [ -n "${LIMIT:-}" ]; then url="${url}?limit=${LIMIT}"; fi
+          echo "POST ${url%%\?*} (limit=${LIMIT:-none})"
+          http_code=$(curl -sS -o response.json -w "%{http_code}" -X POST "$url" \
+            -H "Authorization: Bearer ${SYNC_SECRET}" \
+            -H "Content-Type: application/json")
+          echo "HTTP ${http_code}"
+          echo "--- response ---"
+          cat response.json || true
+          echo
+          # Fail the run on a non-200 so sync failures are visible in the Actions tab.
+          test "${http_code}" = "200"

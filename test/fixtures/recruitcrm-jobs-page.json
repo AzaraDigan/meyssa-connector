@@ -1,0 +1,39 @@
+{
+  "current_page": 1,
+  "per_page": 25,
+  "from": 1,
+  "to": 2,
+  "next_page_url": null,
+  "data": [
+    {
+      "id": 4821,
+      "slug": "4821-senior-associate-banking-finance",
+      "name": "Senior Associate, Banking & Finance (5-7 PQE) - Dubai",
+      "job_description_text": "<h3>Role overview</h3><p>An established practice is hiring a senior associate for its banking and finance team. The role focuses on lending and debt finance.</p><h3>Key responsibilities</h3><ul><li>Advising lenders and borrowers</li><li>Drafting finance documentation</li></ul><h3>Candidate profile</h3><ul><li>5 to 7 years PQE in banking and finance</li><li>Common law qualification</li></ul>",
+      "city": "Dubai",
+      "country": "United Arab Emirates",
+      "job_status": { "id": 1, "label": "Open" },
+      "created_on": "2026-05-20T09:00:00.000Z",
+      "minimum_experience": 5,
+      "maximum_experience": 7,
+      "job_type": { "label": "Permanent" },
+      "company_name": "Confidential Magic Circle LLP",
+      "number_of_openings": 1
+    },
+    {
+      "id": 4830,
+      "slug": "4830-corporate-counsel-riyadh",
+      "name": "Corporate Counsel, 8+ PQE, Riyadh",
+      "job_description_text": "<h3>Role overview</h3><p>A regional group seeks corporate counsel to support its M&A and joint venture activity.</p><h3>Key responsibilities</h3><ul><li>Leading transaction workstreams</li><li>Managing external counsel</li></ul><h3>Candidate profile</h3><ul><li>8+ years PQE in corporate / M&A</li></ul>",
+      "city": "Riyadh",
+      "country": "Saudi Arabia",
+      "job_status": { "id": 1, "label": "Open" },
+      "created_on": "2026-05-22T07:30:00.000Z",
+      "minimum_experience": 8,
+      "maximum_experience": null,
+      "job_type": "Contract",
+      "company": { "company_name": "A regional industrial group" },
+      "number_of_openings": 1
+    }
+  ]
+}

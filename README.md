@@ -10,23 +10,27 @@ folder so the next session picks up cleanly.
 
 ## Status
 
-**Phase 1, session 1 (scaffolding). No live API calls have been made.**
+**Phase 1, session 2 (clients implemented). The first live sync is pending a
+manual trigger; see "First sync".**
 
-What works and is tested offline (run `npm test`):
+Tested offline (run `npm test`, 19 tests):
 
-- Option-field ID tables and resolver (`src/config/options.js`).
+- Option-field ID tables and resolver (`src/config/options.js`). Verified against
+  the live collection schema on 2026-05-26.
 - Brand-voice scrubber: dash removal and banned-word linting (`src/brand/scrub.js`).
 - Deterministic transforms: slug, title strip, PQE parse, dates, location
   normalisation, overview (`src/mapping/transforms.js`).
 - full-description HTML builder and section parser (`src/mapping/description.js`).
 - Job mapping orchestrator with the hard rules enforced (`src/mapping/mapJob.js`).
+- RecruitCRM job normaliser (`src/recruitcrm/client.js`), tested with a fixture.
 
-What is stubbed for session 2 (throws "not implemented"):
+Implemented; exercised live only once the sync runs on Vercel (no tokens are held
+locally, by rule):
 
-- RecruitCRM client (`src/recruitcrm/client.js`).
-- Webflow client (`src/webflow/client.js`).
-- The `/api/sync` function runs the orchestration but cannot complete until the
-  two clients are implemented.
+- RecruitCRM client `listJobs` (open jobs, `/jobs/search?job_status=1`, paginated).
+- Webflow client `createDraftItem` and `listExistingJobIds` (Data API v2).
+- `/api/sync` orchestration with create-once idempotency and a job limit.
+- GitHub Actions schedule (`.github/workflows/sync.yml`), every 30 minutes.
 
 ## Architecture
 
@@ -83,19 +87,39 @@ Settings, never committed and never shared in chat.
 
 ## Scheduling
 
-`vercel.json` declares a cron at `0 6 * * *` (once daily). This is deliberate:
-**Vercel's free Hobby tier only allows once-per-day cron**, fired anytime within the
-hour. Sub-daily polling on the free tier is not possible. Three options to poll
-every 15 to 30 minutes:
+Decided: **free Vercel plus a GitHub Actions scheduled workflow** that POSTs to
+`/api/sync` every 30 minutes, authenticated with `SYNC_SECRET`. No Vercel Pro.
 
-1. Upgrade to Vercel Pro (about 20 USD per month) for true sub-daily cron.
-2. Stay on the free tier and trigger `/api/sync` from a free external scheduler
-   (for example cron-job.org, or a GitHub Actions scheduled workflow). Set
-   `SYNC_SECRET` and pass it so only the scheduler can call the endpoint.
-3. Accept once-daily for now.
+The workflow is `.github/workflows/sync.yml`. It also keeps `workflow_dispatch`, so
+a run can be triggered by hand from the Actions tab (used for the first test sync).
 
-This decision is open and does not change the code. See the session note in the
-team folder.
+`vercel.json` still declares a once-daily Vercel cron as a harmless fallback;
+create-once idempotency means a double run never creates duplicates.
+
+Why 30 minutes: GitHub bills each scheduled run as at least one minute, so `*/30`
+(about 1440 runs per month) stays inside a private repo's 2000 free minutes, while
+`*/15` would not. 30 minutes is within the brief's 15 to 30 minute window.
+
+### Repo settings Azara sets once (GitHub repo > Settings)
+
+- Actions **variable** `SYNC_URL` = the deployed endpoint, for example
+  `https://<project>.vercel.app/api/sync`.
+- Actions **secret** `SYNC_SECRET` = the same value stored in Vercel env vars
+  (from Bitwarden, search "meyssa").
+
+## First sync
+
+The first run is deliberately small and manual:
+
+1. Confirm the three secrets are in Vercel env vars: `RECRUITCRM_API_TOKEN`,
+   `WEBFLOW_API_TOKEN`, `SYNC_SECRET`.
+2. Set the GitHub Actions `SYNC_URL` variable and `SYNC_SECRET` secret (above).
+3. In the repo Actions tab, run the `sync` workflow via "Run workflow", with
+   `limit` set to `3`.
+4. The connector fetches up to 3 open jobs, skips any already in the CMS, and
+   creates the rest as **drafts**. Check the Actions log for the JSON summary
+   (`created` / `skipped` / `failed`).
+5. Review the new draft items in the Webflow CMS. Nothing is published.
 
 ## Hard rules (do not change without founder sign-off)
 

@@ -1,11 +1,14 @@
 // Vercel serverless function and cron target: /api/sync
 //
-// Flow (Phase 1): list RecruitCRM jobs -> map each -> create a Webflow DRAFT item.
-// Updates and closures are Phase 2.
+// Flow (Phase 1): list open RecruitCRM jobs -> skip ones already in the CMS ->
+// map each -> create a Webflow DRAFT item. Create-once idempotency makes the
+// schedule safe (polling does not create duplicates). Full update and closure
+// detection is Phase 2.
 //
-// STATUS: orchestration is wired, but the RecruitCRM and Webflow clients are stubs
-// (they throw "not implemented"). No live sync runs until session 2 fills them in.
-// This is intentional: nothing here has touched the real API yet.
+// Controls:
+//   - ?limit=N or env SYNC_MAX_JOBS caps how many jobs are fetched (use for the
+//     first test run, e.g. limit=3).
+//   - SYNC_SECRET, if set, gates the endpoint (see below).
 
 import { RecruitCrmClient } from "../src/recruitcrm/client.js";
 import { WebflowClient } from "../src/webflow/client.js";
@@ -38,11 +41,21 @@ export default async function handler(req, res) {
       collectionId: process.env.WEBFLOW_OPPORTUNITIES_COLLECTION_ID,
     });
 
-    const jobs = await recruitcrm.listJobs();
-    log.info("fetched jobs", { count: jobs.length });
+    const limit = Number(req.query?.limit ?? process.env.SYNC_MAX_JOBS) || undefined;
+
+    const jobs = await recruitcrm.listJobs({ limit });
+    log.info("fetched jobs", { count: jobs.length, limit: limit ?? "none" });
+
+    // Create-once: skip any job already represented in the CMS by job-id.
+    const existingJobIds = await webflow.listExistingJobIds();
+    log.info("existing job-ids in CMS", { count: existingJobIds.size });
 
     for (const job of jobs) {
       try {
+        if (existingJobIds.has(String(job.id))) {
+          report.recordSkipped(job.id, { reason: "already in CMS (create-once)" });
+          continue;
+        }
         const { fieldData, unmapped, findings } = mapJob(job);
         if (unmapped.length > 0) {
           // A missing required Option would be a bad draft. Skip and flag so a

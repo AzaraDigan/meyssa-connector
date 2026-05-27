@@ -14,6 +14,13 @@ export const LOCATION = {
   "Manama, Bahrain": "2e662732a35556fdcf88410d9e57b0af",
   "Kuwait City, Kuwait": "bf764aab31442ce857dabf656c9caf95",
   "Muscat, Oman": "ff9826fd34a0fc9a4fba5e9f560ab9ed",
+  // Confidential-region options exist on the live collection. Phase 1 maps roles
+  // to their real city (confidential framing hides the client name, not the city),
+  // so these are kept for completeness and possible later use, not auto-assigned.
+  // Note: the option names carry an em dash in Webflow's own data; we match on ID.
+  "Confidential — GCC": "7df1584c7ade5a9e7cb4cc4653b50a18",
+  "Confidential — APAC": "75df431f6301128762f5659c92119d4a",
+  "Confidential — Europe": "d7c923e325b80473a25143abbc97b707",
 };
 
 export const PRACTICE_SETTING = {
