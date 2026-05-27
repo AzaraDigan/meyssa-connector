@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { normalizeJob, normalizeJobType } from "../src/recruitcrm/client.js";
+import { normalizeJob, normalizeJobType, getCustomField } from "../src/recruitcrm/client.js";
 import { mapJob } from "../src/mapping/mapJob.js";
 
 const page = JSON.parse(
@@ -45,6 +45,57 @@ test("normalized RecruitCRM job 1 maps to a clean, draft-ready Webflow item", ()
   assert.equal(fieldData["confidential"], true);
   assert.equal(fieldData["client-name"], "A leading international law firm");
   assert.equal(fieldData["job-id"], "4821");
+});
+
+test("getCustomField reads custom fields by name, case-insensitively", () => {
+  const raw = {
+    custom_fields: [
+      { field_name: "Practice Area", field_type: "dropdown", value: "Corporate / M&A" },
+      { field_name: "Seniority", field_type: "dropdown", value: "Senior Legal Counsel" },
+      { field_name: "Empty", value: "" },
+    ],
+  };
+  assert.equal(getCustomField(raw, "practice area"), "Corporate / M&A");
+  assert.equal(getCustomField(raw, "Seniority", "Job Level"), "Senior Legal Counsel");
+  assert.equal(getCustomField(raw, "Empty"), null);
+  assert.equal(getCustomField(raw, "Nope"), null);
+  assert.equal(getCustomField({}, "Anything"), null);
+});
+
+test("explicit custom fields override keyword inference", () => {
+  const raw = {
+    id: 99,
+    slug: "99-corporate-lawyer-xyz",
+    name: "Corporate Lawyer",
+    job_description_text:
+      "<h3>Role overview</h3><p>Banking and finance heavy fintech role.</p>" +
+      "<h3>Key responsibilities</h3><ul><li>Advise</li></ul>" +
+      "<h3>Candidate profile</h3><ul><li>5 years</li></ul>",
+    city: "Abu Dhabi",
+    country: "United Arab Emirates",
+    created_on: "2026-05-27T00:00:00.000Z",
+    minimum_experience: 5,
+    maximum_experience: 10,
+    company_name: "A fintech group",
+    custom_fields: [
+      { field_name: "Practice Area", value: "Corporate / M&A" },
+      { field_name: "Seniority", value: "Senior Legal Counsel" },
+      { field_name: "Practice Setting", value: "In-House" },
+      { field_name: "Client Descriptor", value: "A well-funded regional fintech" },
+    ],
+  };
+  const job = normalizeJob(raw);
+  assert.equal(job.practiceArea, "Corporate / M&A");
+  assert.equal(job.seniority, "Senior Legal Counsel");
+
+  const { fieldData, unmapped } = mapJob(job);
+  assert.equal(unmapped.length, 0, JSON.stringify(unmapped));
+  // Explicit values win even though the description keywords would infer
+  // Banking & Finance and the title would infer a private-practice tier.
+  assert.equal(fieldData["practice-area"], "ed090f6b8be2f98c4a7add3624f8deb5"); // Corporate / M&A
+  assert.equal(fieldData["seniority"], "278cdd8fcfbfdbb12b42865fad8f157d"); // Senior Legal Counsel
+  assert.equal(fieldData["practice-setting"], "7f3830ba550d51aeec7bb7125d3f83ad"); // In-House
+  assert.equal(fieldData["client-name"], "A well-funded regional fintech");
 });
 
 test("normalized RecruitCRM job 2 (Riyadh, In-House) maps cleanly with In-House default", () => {

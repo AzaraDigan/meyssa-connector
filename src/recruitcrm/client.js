@@ -51,6 +51,23 @@ export function normalizeJobType(raw) {
   return JOB_TYPE_ALIASES[label.trim().toLowerCase()] ?? label.trim() ?? "Permanent";
 }
 
+// Read a custom field value by name from a RecruitCRM job. Custom fields arrive as
+// an array: custom_fields: [{ field_name, field_type, value }]. Matching is
+// case-insensitive and trimmed. Accepts several aliases for the same concept.
+// Returns the trimmed string value, or null if absent/empty.
+export function getCustomField(raw, ...names) {
+  const fields = Array.isArray(raw?.custom_fields) ? raw.custom_fields : [];
+  const wanted = names.map((n) => n.trim().toLowerCase());
+  for (const f of fields) {
+    const fn = String(f?.field_name ?? "").trim().toLowerCase();
+    if (wanted.includes(fn)) {
+      const v = f?.value;
+      if (v != null && String(v).trim() !== "") return String(v).trim();
+    }
+  }
+  return null;
+}
+
 // Turn a raw RecruitCRM job into the shape mapJob expects.
 export function normalizeJob(raw) {
   const city = raw.city ?? "";
@@ -66,19 +83,28 @@ export function normalizeJob(raw) {
 
   const toNum = (v) => (v === null || v === undefined || v === "" ? null : Number(v));
 
+  // Explicit values the recruiter records in RecruitCRM custom fields. When present
+  // these are authoritative; mapJob falls back to inference only when they are absent.
+  const explicitJobType =
+    getCustomField(raw, "Employment Type", "Type") ?? raw.job_type ?? raw.employment_type;
+
   return {
     id: String(raw.id ?? raw.slug ?? ""),
     title: raw.name ?? "",
     description: raw.job_description_text ?? raw.job_description ?? "",
     locationText,
-    jobType: normalizeJobType(raw.job_type ?? raw.employment_type),
+    jobType: normalizeJobType(explicitJobType),
     createdDate: raw.created_on ?? raw.created_at ?? "",
     pqeMin: toNum(raw.minimum_experience),
     pqeMax: toNum(raw.maximum_experience),
     companyName,
-    // RecruitCRM apply links are slug-based. Verify the exact form against a real
-    // job on the first sync; adjust here (or in mapJob) if it differs.
+    // RecruitCRM apply links are slug-based. Verified on job 32 (long alphanumeric slug).
     applySlug: raw.slug ?? String(raw.id ?? ""),
+    // Explicit Option values from custom fields (null when not set).
+    practiceArea: getCustomField(raw, "Practice Area"),
+    seniority: getCustomField(raw, "Seniority", "Job Level"),
+    practiceSetting: getCustomField(raw, "Practice Setting"),
+    clientDescriptor: getCustomField(raw, "Client Descriptor", "Client Name"),
   };
 }
 

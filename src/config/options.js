@@ -85,6 +85,19 @@ export function resolveOption(table, label) {
   return id ?? null;
 }
 
+// Like resolveOption but tolerant of casing and surrounding whitespace, so an
+// explicit value typed into RecruitCRM ("corporate / m&a") still resolves to the
+// canonical Option. Exact match wins first.
+export function resolveOptionLoose(table, label) {
+  if (label == null) return null;
+  if (table[label]) return table[label];
+  const want = String(label).trim().toLowerCase();
+  for (const [name, id] of Object.entries(table)) {
+    if (name.toLowerCase() === want) return id;
+  }
+  return null;
+}
+
 // All tables in one object so callers can look up by field name.
 export const OPTION_TABLES = {
   location: LOCATION,

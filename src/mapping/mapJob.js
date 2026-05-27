@@ -14,7 +14,7 @@
 import { FIELD_SLUGS } from "../config/webflow.js";
 import {
   LOCATION, PRACTICE_SETTING, PRACTICE_AREA, SENIORITY, EMPLOYMENT_TYPE, STATUS,
-  DEFAULTS, resolveOption,
+  DEFAULTS, resolveOption, resolveOptionLoose,
 } from "../config/options.js";
 import {
   normaliseLocation, buildSlug, stripTitle, parsePqe, validThroughFrom, buildOverview,
@@ -22,36 +22,47 @@ import {
 import { inferPracticeSetting, inferPracticeArea, inferSeniority } from "./infer.js";
 import { parseSections, buildFullDescriptionHtml } from "./description.js";
 
-const DEFAULT_CLIENT_DESCRIPTOR = "A leading international law firm";
+// Generic, anonymised client descriptor by practice setting, used only when the
+// recruiter has not supplied an explicit "Client Descriptor" custom field. Never
+// the real client name (hard rule). Wording is a brand decision; refine with Yusra.
+function descriptorForSetting(setting) {
+  if (setting === "Private Practice") return "A leading international law firm";
+  if (setting === "In-House") return "A leading regional business";
+  return "A leading international law firm";
+}
 
-export function mapJob(job, { clientDescriptor = DEFAULT_CLIENT_DESCRIPTOR } = {}) {
+export function mapJob(job, opts = {}) {
   const unmapped = [];
   const findings = [];
 
   const roleTitle = stripTitle(job.title);
   const pqe = parsePqe(job.title) ?? { min: job.pqeMin ?? null, max: job.pqeMax ?? null };
 
-  // Option resolutions. Each unresolved required Option is recorded in `unmapped`.
+  // For each Option we prefer an explicit value the recruiter recorded in RecruitCRM
+  // (job.practiceArea / job.seniority / job.practiceSetting), and fall back to
+  // inference only when it is absent. resolveOptionLoose tolerates casing.
   const locationLabel = normaliseLocation(job.locationText);
   const locationId = resolveOption(LOCATION, locationLabel);
   if (!locationId) unmapped.push({ field: "location", raw: job.locationText });
 
-  const practiceSettingLabel = inferPracticeSetting(job.companyName);
-  const practiceSettingId = resolveOption(PRACTICE_SETTING, practiceSettingLabel);
-  if (!practiceSettingId) unmapped.push({ field: "practice-setting", raw: "(inferred from company; needs confirmation)" });
+  const practiceSettingLabel = job.practiceSetting ?? inferPracticeSetting(job.companyName);
+  const practiceSettingId = resolveOptionLoose(PRACTICE_SETTING, practiceSettingLabel);
+  if (!practiceSettingId) unmapped.push({ field: "practice-setting", raw: job.practiceSetting ?? "(could not infer from company)" });
 
-  const practiceAreaLabel = inferPracticeArea(job.title, job.description);
-  const practiceAreaId = resolveOption(PRACTICE_AREA, practiceAreaLabel);
-  if (!practiceAreaId) unmapped.push({ field: "practice-area", raw: "(inferred from description; needs confirmation)" });
+  const practiceAreaLabel = job.practiceArea ?? inferPracticeArea(job.title, job.description);
+  const practiceAreaId = resolveOptionLoose(PRACTICE_AREA, practiceAreaLabel);
+  if (!practiceAreaId) unmapped.push({ field: "practice-area", raw: job.practiceArea ?? "(could not infer from description)" });
 
-  const seniorityLabel = inferSeniority(job.title, pqe);
-  const seniorityId = resolveOption(SENIORITY, seniorityLabel);
-  if (!seniorityId) unmapped.push({ field: "seniority", raw: job.title });
+  const seniorityLabel = job.seniority ?? inferSeniority(job.title, pqe);
+  const seniorityId = resolveOptionLoose(SENIORITY, seniorityLabel);
+  if (!seniorityId) unmapped.push({ field: "seniority", raw: job.seniority ?? job.title });
 
-  const employmentLabel = job.jobType && EMPLOYMENT_TYPE[job.jobType] ? job.jobType : DEFAULTS.employmentType;
-  const employmentId = resolveOption(EMPLOYMENT_TYPE, employmentLabel);
+  const employmentId = resolveOptionLoose(EMPLOYMENT_TYPE, job.jobType) ?? resolveOption(EMPLOYMENT_TYPE, DEFAULTS.employmentType);
 
   const statusId = resolveOption(STATUS, DEFAULTS.status);
+
+  // Client descriptor: explicit field wins, else a generic per-setting default.
+  const clientDescriptor = opts.clientDescriptor ?? job.clientDescriptor ?? descriptorForSetting(practiceSettingLabel);
 
   // Description: parse into sections, then assemble the exact required HTML.
   const sections = parseSections(job.description);
