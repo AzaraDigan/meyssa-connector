@@ -109,6 +109,17 @@ test("parseSections splits the sample HTML description into three complete secti
   assert.ok(s.profile.length >= 2);
 });
 
+test("parseSections drops a lead-in line ending in a colon before the bullets", () => {
+  const raw =
+    "Role overview\nAn overview.\n" +
+    "Key responsibilities\nYou will:\nDo a thing\nDo another\n" +
+    "Candidate profile\nThe candidate will be:\n5 years";
+  const s = parseSections(raw);
+  assert.ok(s.complete);
+  assert.deepEqual(s.responsibilities, ["Do a thing", "Do another"]);
+  assert.deepEqual(s.profile, ["5 years"]);
+});
+
 test("mapJob enforces hard rules and maps the sample job cleanly", () => {
   const { fieldData, unmapped } = mapJob(sampleJob);
 

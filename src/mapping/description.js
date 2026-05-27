@@ -72,8 +72,12 @@ export function parseSections(raw) {
     if (current === "overview") {
       result.overview = result.overview ? `${result.overview} ${line}` : line;
     } else if (current === "responsibilities") {
+      // Drop a lead-in line that ends in a colon (e.g. "You will:") sitting just
+      // above the bullets, so it does not become its own list item.
+      if (result.responsibilities.length === 0 && /:\s*$/.test(line)) continue;
       result.responsibilities.push(line.replace(/^[-•*]\s*/, ""));
     } else if (current === "profile") {
+      if (result.profile.length === 0 && /:\s*$/.test(line)) continue;
       result.profile.push(line.replace(/^[-•*]\s*/, ""));
     }
   }
