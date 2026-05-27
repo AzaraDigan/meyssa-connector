@@ -18,12 +18,12 @@ const LAW_FIRM_HINTS = [
 ];
 
 export function inferPracticeSetting(companyName) {
-  if (typeof companyName !== "string" || !companyName.trim()) return null;
-  const c = companyName.toLowerCase();
+  const c = typeof companyName === "string" ? companyName.toLowerCase() : "";
   if (LAW_FIRM_HINTS.some((h) => c.includes(h))) return "Private Practice";
-  // Not obviously a law firm. Default lean is In-House, but return null so a human
-  // confirms rather than the connector mislabelling a firm it did not recognise.
-  return null;
+  // Per the field mapping spec: anything not detected as a law firm defaults to
+  // In-House. This is a best-effort binary. The human reviews each draft and can
+  // flip practice-setting if a private-practice firm was not recognised by name.
+  return "In-House";
 }
 
 // practice-area: keyword scan over title + description. First strong match wins.

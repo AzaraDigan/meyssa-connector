@@ -47,12 +47,13 @@ test("normalized RecruitCRM job 1 maps to a clean, draft-ready Webflow item", ()
   assert.equal(fieldData["job-id"], "4821");
 });
 
-test("normalized RecruitCRM job 2 (Riyadh, In-House) flags practice-setting for review", () => {
+test("normalized RecruitCRM job 2 (Riyadh, In-House) maps cleanly with In-House default", () => {
   const { fieldData, unmapped } = mapJob(normalizeJob(page.data[1]));
   assert.equal(fieldData["location"], "5af353f826842399e65336d133c5eb95"); // Riyadh
   assert.equal(fieldData["pqe-min"], 8);
   assert.equal(fieldData["pqe-max"], 40); // 8+ unbounded
-  // Company is not obviously a law firm, so practice-setting is left for a human.
-  const fields = unmapped.map((u) => u.field);
-  assert.ok(fields.includes("practice-setting"), `expected practice-setting unmapped, got ${JSON.stringify(fields)}`);
+  // Company is not a detected law firm, so practice-setting defaults to In-House
+  // per the field mapping spec (human can flip it on review).
+  assert.equal(fieldData["practice-setting"], "7f3830ba550d51aeec7bb7125d3f83ad"); // In-House
+  assert.equal(unmapped.length, 0, `expected no unmapped fields, got ${JSON.stringify(unmapped)}`);
 });
