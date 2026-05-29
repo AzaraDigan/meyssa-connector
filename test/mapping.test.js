@@ -9,7 +9,7 @@ import {
   normaliseLocation, buildSlug, slugify, stripTitle, parsePqe, validThroughFrom, buildOverview,
 } from "../src/mapping/transforms.js";
 import { buildFullDescriptionHtml, parseSections } from "../src/mapping/description.js";
-import { mapJob } from "../src/mapping/mapJob.js";
+import { mapJob, diffUpdateable, pickUpdateableFields, UPDATEABLE_FIELDS } from "../src/mapping/mapJob.js";
 
 const sampleJob = JSON.parse(
   readFileSync(fileURLToPath(new URL("./fixtures/sample-job.json", import.meta.url)), "utf8"),
@@ -118,6 +118,60 @@ test("parseSections drops a lead-in line ending in a colon before the bullets", 
   assert.ok(s.complete);
   assert.deepEqual(s.responsibilities, ["Do a thing", "Do another"]);
   assert.deepEqual(s.profile, ["5 years"]);
+});
+
+test("diffUpdateable returns only changed updateable fields and ignores excluded ones", () => {
+  const existing = {
+    name: "Old Title",
+    slug: "23-old-title",                       // excluded from updates
+    "job-id": "23",                              // excluded
+    status: "b070ef1c5ee3565f064d7262560133bc",  // excluded
+    "client-name": "Manually edited descriptor", // excluded
+    "posted-date": "2026-05-20T09:00:00.000Z",   // excluded
+    "valid-through": "2026-07-19T09:00:00.000Z", // excluded
+    confidential: true,                           // excluded
+    location: "9ec3180b705e7db6b38475fe3605bdd4",
+    "pqe-min": 5,
+    "pqe-max": 7,
+    overview: "old overview",
+  };
+  const next = {
+    ...existing,
+    name: "New Title",        // changed: should appear
+    slug: "different-slug",    // excluded: should NOT appear
+    "client-name": "Generated",// excluded: should NOT appear
+    "pqe-max": 10,             // changed: should appear (numeric)
+    overview: "old overview",  // unchanged
+  };
+  const changes = diffUpdateable(next, existing);
+  assert.deepEqual(Object.keys(changes).sort(), ["name", "pqe-max"].sort());
+  assert.equal(changes["name"], "New Title");
+  assert.equal(changes["pqe-max"], 10);
+});
+
+test("pickUpdateableFields drops excluded keys", () => {
+  const fd = {
+    name: "X", slug: "y", "job-id": "1", status: "s",
+    "client-name": "c", "posted-date": "p", confidential: true,
+    location: "loc", "pqe-min": 5,
+  };
+  const picked = pickUpdateableFields(fd);
+  assert.ok(!("slug" in picked));
+  assert.ok(!("job-id" in picked));
+  assert.ok(!("status" in picked));
+  assert.ok(!("client-name" in picked));
+  assert.ok(!("posted-date" in picked));
+  assert.ok(!("confidential" in picked));
+  assert.equal(picked.name, "X");
+  assert.equal(picked.location, "loc");
+  assert.equal(picked["pqe-min"], 5);
+});
+
+test("UPDATEABLE_FIELDS list is the conservative set we expect", () => {
+  assert.deepEqual([...UPDATEABLE_FIELDS].sort(), [
+    "apply-url", "employment-type", "full-description", "location", "name",
+    "overview", "pqe-max", "pqe-min", "practice-area", "practice-setting", "seniority",
+  ]);
 });
 
 test("mapJob enforces hard rules and maps the sample job cleanly", () => {

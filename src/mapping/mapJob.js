@@ -101,3 +101,58 @@ export function mapJob(job, opts = {}) {
 
   return { fieldData, unmapped, findings };
 }
+
+// Phase 2 helpers --------------------------------------------------------------
+//
+// On a re-sync of an existing role, we update only this conservative field set.
+// Excluded on purpose:
+//   - slug, job-id    : changing these breaks URLs and inbound links.
+//   - posted-date     : the role's original go-live date; should not move.
+//   - valid-through   : tied to posted-date by spec; a human re-posts if stale.
+//   - status          : preserved so manual Active/Closed/Archived edits stick.
+//                       Status transitions are handled explicitly by the sync
+//                       orchestrator (closure detection, and reopening a Closed
+//                       item if it shows up open again in RecruitCRM).
+//   - confidential    : hard rule, always true; nothing to update.
+//   - client-name     : may have been hand-edited; the connector does not overwrite.
+
+export const UPDATEABLE_FIELDS = [
+  FIELD_SLUGS.name,
+  FIELD_SLUGS.location,
+  FIELD_SLUGS.practiceSetting,
+  FIELD_SLUGS.practiceArea,
+  FIELD_SLUGS.seniority,
+  FIELD_SLUGS.employmentType,
+  FIELD_SLUGS.pqeMin,
+  FIELD_SLUGS.pqeMax,
+  FIELD_SLUGS.applyUrl,
+  FIELD_SLUGS.overview,
+  FIELD_SLUGS.fullDescription,
+];
+
+export function pickUpdateableFields(fieldData) {
+  const out = {};
+  for (const k of UPDATEABLE_FIELDS) {
+    if (k in fieldData) out[k] = fieldData[k];
+  }
+  return out;
+}
+
+// Returns just the changed updateable fields. Comparison is permissive (numbers
+// and strings compared via String()) so a number stored as "5" matches 5.
+export function diffUpdateable(newFieldData, existingFieldData) {
+  const changes = {};
+  for (const k of UPDATEABLE_FIELDS) {
+    if (!shallowEqual(newFieldData?.[k], existingFieldData?.[k])) {
+      changes[k] = newFieldData?.[k];
+    }
+  }
+  return changes;
+}
+
+function shallowEqual(a, b) {
+  if (a === b) return true;
+  if (a == null && b == null) return true;
+  if (a == null || b == null) return false;
+  return String(a) === String(b);
+}

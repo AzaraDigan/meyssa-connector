@@ -23,12 +23,22 @@ export const log = {
 export class RunReport {
   constructor() {
     this.created = [];
+    this.updated = [];
+    this.closed = [];
     this.skipped = [];
     this.failed = [];
   }
   recordCreated(jobId, itemId) {
     this.created.push({ jobId, itemId });
     log.info("created draft", { jobId, itemId });
+  }
+  recordUpdated(jobId, itemId, fields) {
+    this.updated.push({ jobId, itemId, fields });
+    log.info("updated item (staged, not published)", { jobId, itemId, fields });
+  }
+  recordClosed(jobId, itemId) {
+    this.closed.push({ jobId, itemId });
+    log.info("closed item (staged, not published)", { jobId, itemId });
   }
   recordSkipped(jobId, reason) {
     this.skipped.push({ jobId, reason });
@@ -42,9 +52,17 @@ export class RunReport {
   summary() {
     return {
       created: this.created.length,
+      updated: this.updated.length,
+      closed: this.closed.length,
       skipped: this.skipped.length,
       failed: this.failed.length,
-      details: { created: this.created, skipped: this.skipped, failed: this.failed },
+      details: {
+        created: this.created,
+        updated: this.updated,
+        closed: this.closed,
+        skipped: this.skipped,
+        failed: this.failed,
+      },
     };
   }
 }
