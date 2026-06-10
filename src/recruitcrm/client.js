@@ -103,7 +103,9 @@ export function normalizeJob(raw) {
     // Explicit Option values from custom fields (null when not set).
     practiceArea: getCustomField(raw, "Practice Area"),
     seniority: getCustomField(raw, "Seniority", "Job Level"),
-    practiceSetting: getCustomField(raw, "Practice Setting"),
+    // Read from the hardwired "PP/In-House" dropdown (the authoritative source).
+    // "Practice Setting" kept as a fallback alias in case the field is renamed.
+    practiceSetting: getCustomField(raw, "PP/In-House", "Practice Setting"),
     clientDescriptor: getCustomField(raw, "Client Descriptor", "Client Name"),
   };
 }
