@@ -57,14 +57,28 @@ export class RunReport {
       (s) => Array.isArray(s.reason?.unmapped) && s.reason.unmapped.length > 0,
     );
   }
+  // "Actionable" holds are blocked by at least one field outside the known backlog
+  // (currently the full-description / missing-headings issue, tracked separately).
+  // A role held ONLY on a backlog field is reported but does not fail the cron, so
+  // the steady-state backlog doesn't spam failure emails — while a genuinely new
+  // problem (e.g. a role posted with a blank PP/In-House dropdown) still does.
+  static BACKLOG_FIELDS = new Set(["full-description"]);
+  heldActionable() {
+    return this.heldJobs().filter((s) =>
+      s.reason.unmapped.some((u) => !RunReport.BACKLOG_FIELDS.has(u.field)),
+    );
+  }
   summary() {
     const held = this.heldJobs();
+    const heldActionable = this.heldActionable();
     return {
       created: this.created.length,
       updated: this.updated.length,
       closed: this.closed.length,
       skipped: this.skipped.length,
       held: held.length,
+      heldActionable: heldActionable.length,
+      heldBacklog: held.length - heldActionable.length,
       failed: this.failed.length,
       details: {
         created: this.created,
@@ -72,6 +86,7 @@ export class RunReport {
         closed: this.closed,
         skipped: this.skipped,
         held,
+        heldActionable,
         failed: this.failed,
       },
     };
