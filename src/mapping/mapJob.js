@@ -19,7 +19,7 @@ import {
 import {
   normaliseLocation, buildSlug, stripTitle, parsePqe, validThroughFrom, buildOverview,
 } from "./transforms.js";
-import { inferPracticeSetting, inferPracticeArea, inferSeniority } from "./infer.js";
+import { inferPracticeArea, inferSeniority } from "./infer.js";
 import { parseSections, buildFullDescriptionHtml } from "./description.js";
 
 // Generic, anonymised client descriptor by practice setting, used only when the
@@ -45,9 +45,13 @@ export function mapJob(job, opts = {}) {
   const locationId = resolveOption(LOCATION, locationLabel);
   if (!locationId) unmapped.push({ field: "location", raw: job.locationText });
 
-  const practiceSettingLabel = job.practiceSetting ?? inferPracticeSetting(job.companyName);
+  // Option A (no-default): practice-setting comes ONLY from the explicit RecruitCRM
+  // "PP/In-House" dropdown. We never infer it. An absent or unrecognised value is held
+  // (added to unmapped) so the sync skips and flags the job rather than guessing
+  // In-House — the old default silently overwrote manual corrections on re-sync.
+  const practiceSettingLabel = job.practiceSetting;
   const practiceSettingId = resolveOptionLoose(PRACTICE_SETTING, practiceSettingLabel);
-  if (!practiceSettingId) unmapped.push({ field: "practice-setting", raw: job.practiceSetting ?? "(could not infer from company)" });
+  if (!practiceSettingId) unmapped.push({ field: "practice-setting", raw: job.practiceSetting ?? "(not set in RecruitCRM)" });
 
   const practiceAreaLabel = job.practiceArea ?? inferPracticeArea(job.title, job.description);
   const practiceAreaId = resolveOptionLoose(PRACTICE_AREA, practiceAreaLabel);

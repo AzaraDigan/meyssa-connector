@@ -98,13 +98,13 @@ test("explicit custom fields override keyword inference", () => {
   assert.equal(fieldData["client-name"], "A well-funded regional fintech");
 });
 
-test("normalized RecruitCRM job 2 (Riyadh, In-House) maps cleanly with In-House default", () => {
+test("normalized RecruitCRM job 2 (Riyadh) maps cleanly with explicit In-House from the PP/In-House dropdown", () => {
   const { fieldData, unmapped } = mapJob(normalizeJob(page.data[1]));
   assert.equal(fieldData["location"], "5af353f826842399e65336d133c5eb95"); // Riyadh
   assert.equal(fieldData["pqe-min"], 8);
   assert.equal(fieldData["pqe-max"], 40); // 8+ unbounded
-  // Company is not a detected law firm, so practice-setting defaults to In-House
-  // per the field mapping spec (human can flip it on review).
+  // practice-setting comes from the explicit PP/In-House dropdown ("In-House");
+  // it is no longer inferred from the company name.
   assert.equal(fieldData["practice-setting"], "7f3830ba550d51aeec7bb7125d3f83ad"); // In-House
   assert.equal(unmapped.length, 0, `expected no unmapped fields, got ${JSON.stringify(unmapped)}`);
 });

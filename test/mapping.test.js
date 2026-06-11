@@ -196,8 +196,43 @@ test("mapJob enforces hard rules and maps the sample job cleanly", () => {
   assert.equal(fieldData["apply-url"], "https://recruitcrm.io/apply/abc123");
   assert.equal(fieldData["valid-through"], "2026-07-19T09:00:00.000Z");
 
-  // practice-setting is the only field we expect unresolved here: the company name
-  // ("...LLP") is a law firm, so it should actually resolve to Private Practice.
+  // practice-setting comes from the explicit PP/In-House dropdown on the fixture
+  // ("Private Practice"); it is no longer inferred from the company name.
   assert.equal(fieldData["practice-setting"], "646b1b61343f6fc9bc06fb725e6476b6");
   assert.equal(unmapped.length, 0, `expected no unmapped fields, got ${JSON.stringify(unmapped)}`);
+});
+
+test("practice-setting: explicit valid values pass through, never inferred", () => {
+  const pp = mapJob({ ...sampleJob, practiceSetting: "Private Practice" });
+  assert.equal(pp.fieldData["practice-setting"], "646b1b61343f6fc9bc06fb725e6476b6");
+  assert.ok(!pp.unmapped.some((u) => u.field === "practice-setting"));
+
+  const inhouse = mapJob({ ...sampleJob, practiceSetting: "In-House" });
+  assert.equal(inhouse.fieldData["practice-setting"], "7f3830ba550d51aeec7bb7125d3f83ad");
+  assert.ok(!inhouse.unmapped.some((u) => u.field === "practice-setting"));
+});
+
+test("practice-setting: casing/whitespace is tolerated on an explicit value", () => {
+  const { fieldData, unmapped } = mapJob({ ...sampleJob, practiceSetting: "  private practice  " });
+  assert.equal(fieldData["practice-setting"], "646b1b61343f6fc9bc06fb725e6476b6");
+  assert.ok(!unmapped.some((u) => u.field === "practice-setting"));
+});
+
+test("practice-setting: missing/empty/unrecognised is HELD, never defaulted to In-House", () => {
+  const IN_HOUSE = "7f3830ba550d51aeec7bb7125d3f83ad";
+  const cases = [undefined, null, "", "   ", "Law Firm", "PP"];
+  for (const value of cases) {
+    const job = { ...sampleJob };
+    if (value === undefined) delete job.practiceSetting;
+    else job.practiceSetting = value;
+    const { fieldData, unmapped } = mapJob(job);
+    assert.notEqual(
+      fieldData["practice-setting"], IN_HOUSE,
+      `value ${JSON.stringify(value)} must not silently default to In-House`,
+    );
+    assert.ok(
+      unmapped.some((u) => u.field === "practice-setting"),
+      `value ${JSON.stringify(value)} must be recorded as an unmapped/held field`,
+    );
+  }
 });
