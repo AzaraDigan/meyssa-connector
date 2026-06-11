@@ -50,23 +50,36 @@ jobs:
           test "${http_code}" = "200"
 
       - name: Warn / fail on held or failed jobs
-        # Holds (a role with a blank/unrecognised PP/In-House dropdown) and per-job
-        # failures both need a human. The HTTP call above still returns 200 in those
-        # cases, so inspect the run summary and turn the run red — that triggers
-        # GitHub's failure email for the scheduled workflow. A clean sync stays green.
+        # The HTTP call above returns 200 even when individual roles are held or fail,
+        # so inspect the run summary here.
+        #
+        # We split holds into two buckets (see RunReport in src/lib/logger.js):
+        #   - heldActionable: blocked by something other than the known description
+        #     backlog (e.g. a blank PP/In-House dropdown, an unmapped location). These,
+        #     and any per-job failures, FAIL the run so GitHub emails — that is the
+        #     "a role was posted wrong" signal worth interrupting for.
+        #   - heldBacklog: held ONLY on the full-description/missing-headings issue,
+        #     tracked separately. These are WARNED (annotated) but do not fail the run,
+        #     so the steady-state backlog does not spam failure emails every cycle.
+        # A fully clean sync stays green.
         run: |
           set -euo pipefail
           test -f response.json || { echo "no response.json from previous step"; exit 1; }
           held=$(jq -r '.held // 0' response.json)
+          actionable=$(jq -r '.heldActionable // 0' response.json)
+          backlog=$(jq -r '.heldBacklog // 0' response.json)
           failed=$(jq -r '.failed // 0' response.json)
-          echo "held=${held} failed=${failed}"
+          echo "held=${held} (actionable=${actionable}, backlog=${backlog}) failed=${failed}"
 
           # Per-job annotations, visible inline on the Actions run.
-          jq -r '.details.held[]? | "::warning title=Role held (needs review)::job-id \(.jobId) held on: \(.reason.unmapped | map(.field) | join(", "))"' response.json || true
+          jq -r '.details.heldActionable[]? | "::warning title=Role held (needs review)::job-id \(.jobId) held on: \(.reason.unmapped | map(.field) | join(", "))"' response.json || true
           jq -r '.details.failed[]? | "::error title=Job failed::job-id \(.jobId) — \(.error)"' response.json || true
+          if [ "${backlog}" != "0" ]; then
+            echo "::warning title=Backlog holds::${backlog} role(s) held only on description headings (tracked separately; not failing the run)."
+          fi
 
-          if [ "${held}" != "0" ] || [ "${failed}" != "0" ]; then
-            echo "::error::Sync needs attention — held=${held}, failed=${failed}. Set the PP/In-House dropdown (or fix the source) on the listed job-ids."
+          if [ "${actionable}" != "0" ] || [ "${failed}" != "0" ]; then
+            echo "::error::Sync needs attention — actionable holds=${actionable}, failed=${failed}. Set the PP/In-House dropdown (or fix the source) on the annotated job-ids."
             exit 1
           fi
-          echo "All jobs mapped cleanly — nothing held or failed."
+          echo "No actionable holds or failures. (Backlog holds: ${backlog}.)"
