@@ -48,3 +48,25 @@ jobs:
           echo
           # Fail the run on a non-200 so sync failures are visible in the Actions tab.
           test "${http_code}" = "200"
+
+      - name: Warn / fail on held or failed jobs
+        # Holds (a role with a blank/unrecognised PP/In-House dropdown) and per-job
+        # failures both need a human. The HTTP call above still returns 200 in those
+        # cases, so inspect the run summary and turn the run red — that triggers
+        # GitHub's failure email for the scheduled workflow. A clean sync stays green.
+        run: |
+          set -euo pipefail
+          test -f response.json || { echo "no response.json from previous step"; exit 1; }
+          held=$(jq -r '.held // 0' response.json)
+          failed=$(jq -r '.failed // 0' response.json)
+          echo "held=${held} failed=${failed}"
+
+          # Per-job annotations, visible inline on the Actions run.
+          jq -r '.details.held[]? | "::warning title=Role held (needs review)::job-id \(.jobId) held on: \(.reason.unmapped | map(.field) | join(", "))"' response.json || true
+          jq -r '.details.failed[]? | "::error title=Job failed::job-id \(.jobId) — \(.error)"' response.json || true
+
+          if [ "${held}" != "0" ] || [ "${failed}" != "0" ]; then
+            echo "::error::Sync needs attention — held=${held}, failed=${failed}. Set the PP/In-House dropdown (or fix the source) on the listed job-ids."
+            exit 1
+          fi
+          echo "All jobs mapped cleanly — nothing held or failed."

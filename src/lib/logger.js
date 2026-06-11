@@ -49,18 +49,29 @@ export class RunReport {
     this.failed.push({ jobId, error: detail });
     log.error("failed job", { jobId, error: detail });
   }
+  // A "hold" is a skip caused by an unresolved required Option (recorded with an
+  // `unmapped` list), as opposed to a benign "no changes" skip. Holds need a human,
+  // so they are surfaced separately for the cron to warn/fail on.
+  heldJobs() {
+    return this.skipped.filter(
+      (s) => Array.isArray(s.reason?.unmapped) && s.reason.unmapped.length > 0,
+    );
+  }
   summary() {
+    const held = this.heldJobs();
     return {
       created: this.created.length,
       updated: this.updated.length,
       closed: this.closed.length,
       skipped: this.skipped.length,
+      held: held.length,
       failed: this.failed.length,
       details: {
         created: this.created,
         updated: this.updated,
         closed: this.closed,
         skipped: this.skipped,
+        held,
         failed: this.failed,
       },
     };
