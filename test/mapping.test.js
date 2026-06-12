@@ -219,6 +219,15 @@ test("practice-setting: casing/whitespace is tolerated on an explicit value", ()
   assert.ok(!unmapped.some((u) => u.field === "practice-setting"));
 });
 
+test("mapJob omits the Salary field while formatSalary is stubbed (fail-closed)", () => {
+  const { fieldData } = mapJob({
+    ...sampleJob,
+    salaryDisclosed: true, salaryMin: 200000, salaryMax: 250000,
+    salaryCurrency: "USD", salaryPeriod: "Annual",
+  });
+  assert.ok(!("salary" in fieldData), "no salary is written until formatSalary() is un-stubbed");
+});
+
 test("unadvertisedClosure: stage Closed only for a live item, leave others alone", () => {
   // Already live (Active) → pull it off by staging Closed.
   assert.deepEqual(

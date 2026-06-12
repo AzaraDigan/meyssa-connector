@@ -21,6 +21,7 @@ import {
 } from "./transforms.js";
 import { inferPracticeArea, inferSeniority } from "./infer.js";
 import { parseSections, buildFullDescriptionHtml } from "./description.js";
+import { salaryInputs, formatSalary } from "./salary.js";
 
 // Generic, anonymised client descriptor by practice setting, used only when the
 // recruiter has not supplied an explicit "Client Descriptor" custom field. Never
@@ -102,6 +103,13 @@ export function mapJob(job, opts = {}) {
     [FIELD_SLUGS.overview]: overviewResult.text,
     [FIELD_SLUGS.fullDescription]: fullDescription,
   };
+
+  // Salary: written only when the (currently stubbed) formatter returns a value. While
+  // stubbed it returns null, so the Salary field is omitted entirely — fail-closed
+  // (founder rule #5). No salary is ever guessed; nothing publishes until the format
+  // spec is signed off and formatSalary() is implemented.
+  const salaryDisplay = formatSalary(salaryInputs(job));
+  if (salaryDisplay != null) fieldData[FIELD_SLUGS.salary] = salaryDisplay;
 
   return { fieldData, unmapped, findings };
 }

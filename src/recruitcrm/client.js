@@ -82,6 +82,8 @@ export function normalizeJob(raw) {
     "";
 
   const toNum = (v) => (v === null || v === undefined || v === "" ? null : Number(v));
+  const toBool = (v) =>
+    v === true || ["1", "true", "yes", "y", "on"].includes(String(v ?? "").trim().toLowerCase());
 
   // Explicit values the recruiter records in RecruitCRM custom fields. When present
   // these are authoritative; mapJob falls back to inference only when they are absent.
@@ -112,6 +114,16 @@ export function normalizeJob(raw) {
     // enable_job_application_form (1 = ticked). Strict opt-in — only an explicit 1
     // advertises, so an untick (or a job that never had it) stays off the site.
     advertise: Number(raw.enable_job_application_form) === 1,
+    // --- Salary pipeline (read-plumbing only) --------------------------------
+    // Source values for the salary formatter, which is STUBBED pending the §6/Yusra
+    // reconciliation (see "Marcus - salary-spec-reconciliation-...md"). Field names are
+    // read with aliases for both Yusra's brief labels and Omar's §6 slugs, so the spec
+    // decision can't break this. Fail-closed: unset values stay null, never guessed.
+    salaryDisclosed: toBool(getCustomField(raw, "Disclose Salary", "salary_disclosed")),
+    salaryMin: toNum(getCustomField(raw, "Min Salary", "salary_min")),
+    salaryMax: toNum(getCustomField(raw, "Max Salary", "salary_max")),
+    salaryCurrency: getCustomField(raw, "Currency", "salary_currency"),
+    salaryPeriod: getCustomField(raw, "Salary Period", "salary_basis"),
   };
 }
 

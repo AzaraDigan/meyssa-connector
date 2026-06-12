@@ -62,6 +62,42 @@ test("getCustomField reads custom fields by name, case-insensitively", () => {
   assert.equal(getCustomField({}, "Anything"), null);
 });
 
+test("normalizeJob reads salary source fields (aliasing Yusra + Omar names), fail-closed", () => {
+  // Yusra's brief labels + a "Yes" checkbox value.
+  const a = normalizeJob({ id: 1, custom_fields: [
+    { field_name: "Disclose Salary", value: "Yes" },
+    { field_name: "Min Salary", value: "200000" },
+    { field_name: "Max Salary", value: "250000" },
+    { field_name: "Currency", value: "USD" },
+    { field_name: "Salary Period", value: "Annual" },
+  ] });
+  assert.equal(a.salaryDisclosed, true);
+  assert.equal(a.salaryMin, 200000);
+  assert.equal(a.salaryMax, 250000);
+  assert.equal(a.salaryCurrency, "USD");
+  assert.equal(a.salaryPeriod, "Annual");
+
+  // Omar's §6 slugs as the field names + a "1" checkbox value.
+  const b = normalizeJob({ id: 2, custom_fields: [
+    { field_name: "salary_disclosed", value: "1" },
+    { field_name: "salary_min", value: "45000" },
+    { field_name: "salary_currency", value: "AED" },
+    { field_name: "salary_basis", value: "Monthly" },
+  ] });
+  assert.equal(b.salaryDisclosed, true);
+  assert.equal(b.salaryMin, 45000);
+  assert.equal(b.salaryCurrency, "AED");
+  assert.equal(b.salaryPeriod, "Monthly");
+
+  // Unset / confidential → fail-closed nulls; disclose flag false (never guessed).
+  const c = normalizeJob({ id: 3 });
+  assert.equal(c.salaryDisclosed, false);
+  assert.equal(c.salaryMin, null);
+  assert.equal(c.salaryMax, null);
+  assert.equal(c.salaryCurrency, null);
+  assert.equal(c.salaryPeriod, null);
+});
+
 test("normalizeJob: advertise reflects the Enable Job Application Form toggle (strict opt-in)", () => {
   // Ticked → advertised.
   assert.equal(normalizeJob({ id: 1, enable_job_application_form: 1 }).advertise, true);
