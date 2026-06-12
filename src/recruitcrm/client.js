@@ -107,6 +107,11 @@ export function normalizeJob(raw) {
     // "Practice Setting" kept as a fallback alias in case the field is renamed.
     practiceSetting: getCustomField(raw, "PP/In-House", "Practice Setting"),
     clientDescriptor: getCustomField(raw, "Client Descriptor", "Client Name"),
+    // The "Enable Job Application Form" toggle is the advertise gate: the recruiter ticks
+    // it on every job they want on the website. RecruitCRM exposes it as
+    // enable_job_application_form (1 = ticked). Strict opt-in — only an explicit 1
+    // advertises, so an untick (or a job that never had it) stays off the site.
+    advertise: Number(raw.enable_job_application_form) === 1,
   };
 }
 
