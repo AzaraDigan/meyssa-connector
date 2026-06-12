@@ -69,6 +69,15 @@ export default async function handler(req, res) {
     const openJobIds = new Set();
     for (const job of jobs) {
       openJobIds.add(String(job.id));
+      // Advertise gate: only jobs with "Enable Job Application Form" ticked in RecruitCRM
+      // are pulled through. An unticked job (e.g. one that is under offer) is excluded
+      // cleanly — a benign skip, NOT a hold — so it never publishes and does not fail the
+      // cron. NB: an already-live role that is later unticked is left on the site as-is;
+      // auto-removing it is a separate follow-up (see PR description).
+      if (!job.advertise) {
+        report.recordSkipped(job.id, { reason: "excluded: job application form not enabled" });
+        continue;
+      }
       try {
         const { fieldData, unmapped, findings } = mapJob(job);
         if (unmapped.length > 0) {

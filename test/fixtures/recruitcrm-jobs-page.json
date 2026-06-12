@@ -18,6 +18,7 @@
       "maximum_experience": 7,
       "job_type": { "label": "Permanent" },
       "company_name": "Confidential Magic Circle LLP",
+      "enable_job_application_form": 1,
       "custom_fields": [
         { "field_name": "PP/In-House", "field_type": "dropdown", "value": "Private Practice" }
       ],
@@ -36,6 +37,7 @@
       "maximum_experience": null,
       "job_type": "Contract",
       "company": { "company_name": "A regional industrial group" },
+      "enable_job_application_form": 1,
       "custom_fields": [
         { "field_name": "PP/In-House", "field_type": "dropdown", "value": "In-House" }
       ],

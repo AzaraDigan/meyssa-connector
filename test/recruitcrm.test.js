@@ -62,6 +62,17 @@ test("getCustomField reads custom fields by name, case-insensitively", () => {
   assert.equal(getCustomField({}, "Anything"), null);
 });
 
+test("normalizeJob: advertise reflects the Enable Job Application Form toggle (strict opt-in)", () => {
+  // Ticked → advertised.
+  assert.equal(normalizeJob({ id: 1, enable_job_application_form: 1 }).advertise, true);
+  // Unticked → not advertised.
+  assert.equal(normalizeJob({ id: 2, enable_job_application_form: 0 }).advertise, false);
+  // Field absent (older/unknown) → NOT advertised; only an explicit tick publishes.
+  assert.equal(normalizeJob({ id: 3 }).advertise, false);
+  // String "1" from the API still counts as ticked.
+  assert.equal(normalizeJob({ id: 4, enable_job_application_form: "1" }).advertise, true);
+});
+
 test("explicit custom fields override keyword inference", () => {
   const raw = {
     id: 99,
