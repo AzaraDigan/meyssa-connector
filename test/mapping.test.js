@@ -9,7 +9,8 @@ import {
   normaliseLocation, buildSlug, slugify, stripTitle, parsePqe, validThroughFrom, buildOverview,
 } from "../src/mapping/transforms.js";
 import { buildFullDescriptionHtml, parseSections } from "../src/mapping/description.js";
-import { mapJob, diffUpdateable, pickUpdateableFields, UPDATEABLE_FIELDS } from "../src/mapping/mapJob.js";
+import { mapJob, diffUpdateable, pickUpdateableFields, UPDATEABLE_FIELDS, unadvertisedClosure } from "../src/mapping/mapJob.js";
+import { STATUS } from "../src/config/options.js";
 
 const sampleJob = JSON.parse(
   readFileSync(fileURLToPath(new URL("./fixtures/sample-job.json", import.meta.url)), "utf8"),
@@ -216,6 +217,20 @@ test("practice-setting: casing/whitespace is tolerated on an explicit value", ()
   const { fieldData, unmapped } = mapJob({ ...sampleJob, practiceSetting: "  private practice  " });
   assert.equal(fieldData["practice-setting"], "646b1b61343f6fc9bc06fb725e6476b6");
   assert.ok(!unmapped.some((u) => u.field === "practice-setting"));
+});
+
+test("unadvertisedClosure: stage Closed only for a live item, leave others alone", () => {
+  // Already live (Active) → pull it off by staging Closed.
+  assert.deepEqual(
+    unadvertisedClosure({ itemId: "i1", fieldData: { status: STATUS.Active } }),
+    { itemId: "i1", status: STATUS.Closed },
+  );
+  // Never published → nothing to do.
+  assert.equal(unadvertisedClosure(undefined), null);
+  // Already Closed → idempotent, nothing to do (no repeated writes/alerts).
+  assert.equal(unadvertisedClosure({ itemId: "i2", fieldData: { status: STATUS.Closed } }), null);
+  // Already Archived → leave as-is.
+  assert.equal(unadvertisedClosure({ itemId: "i3", fieldData: { status: STATUS.Archived } }), null);
 });
 
 test("practice-setting: missing/empty/unrecognised is HELD, never defaulted to In-House", () => {

@@ -27,7 +27,7 @@
 
 import { RecruitCrmClient } from "../src/recruitcrm/client.js";
 import { WebflowClient } from "../src/webflow/client.js";
-import { mapJob, diffUpdateable } from "../src/mapping/mapJob.js";
+import { mapJob, diffUpdateable, unadvertisedClosure } from "../src/mapping/mapJob.js";
 import { STATUS } from "../src/config/options.js";
 import { FIELD_SLUGS } from "../src/config/webflow.js";
 import { log, RunReport } from "../src/lib/logger.js";
@@ -70,12 +70,25 @@ export default async function handler(req, res) {
     for (const job of jobs) {
       openJobIds.add(String(job.id));
       // Advertise gate: only jobs with "Enable Job Application Form" ticked in RecruitCRM
-      // are pulled through. An unticked job (e.g. one that is under offer) is excluded
-      // cleanly — a benign skip, NOT a hold — so it never publishes and does not fail the
-      // cron. NB: an already-live role that is later unticked is left on the site as-is;
-      // auto-removing it is a separate follow-up (see PR description).
+      // are pulled through. An unticked job (e.g. one under offer) is never published and
+      // is a benign action — NOT a hold — so it does not fail the cron.
+      //   - If it is already live on the site, stage it Closed so it leaves the listing
+      //     (idempotent: once Closed it is a clean skip on later runs). Recorded as a
+      //     closure, not a failure, so no alert.
+      //   - Otherwise nothing to do beyond recording the exclusion.
       if (!job.advertise) {
-        report.recordSkipped(job.id, { reason: "excluded: job application form not enabled" });
+        const existing = existingByJobId.get(String(job.id));
+        const closure = unadvertisedClosure(existing);
+        if (closure) {
+          try {
+            await webflow.updateItem(closure.itemId, { [FIELD_SLUGS.status]: closure.status });
+            report.recordClosed(job.id, closure.itemId);
+          } catch (err) {
+            report.recordFailed(job.id, err);
+          }
+        } else {
+          report.recordSkipped(job.id, { reason: "excluded: job application form not enabled" });
+        }
         continue;
       }
       try {

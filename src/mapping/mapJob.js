@@ -134,6 +134,19 @@ export const UPDATEABLE_FIELDS = [
   FIELD_SLUGS.fullDescription,
 ];
 
+// For a job whose advertise gate is OFF (Enable Job Application Form unticked): if it is
+// already live on the site — an existing item that is not already Closed/Archived — it
+// should be pulled off by staging a Closed status, regardless of the RecruitCRM job status.
+// Returns the itemId + the status to stage, or null when there is nothing to do (never
+// published, or already off). Pure + testable; the sync orchestrator performs the write.
+export function unadvertisedClosure(existing) {
+  const current = existing?.fieldData?.[FIELD_SLUGS.status];
+  if (existing?.itemId && current !== STATUS.Closed && current !== STATUS.Archived) {
+    return { itemId: existing.itemId, status: STATUS.Closed };
+  }
+  return null;
+}
+
 export function pickUpdateableFields(fieldData) {
   const out = {};
   for (const k of UPDATEABLE_FIELDS) {
