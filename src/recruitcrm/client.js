@@ -112,6 +112,17 @@ export function normalizeJob(raw) {
     // enable_job_application_form (1 = ticked). Strict opt-in — only an explicit 1
     // advertises, so an untick (or a job that never had it) stays off the site.
     advertise: Number(raw.enable_job_application_form) === 1,
+    // TEMP salary-field probe (read-only diagnostic; removed once field names confirmed).
+    // Surfaces the raw native salary keys/values so the connector can be pointed at the
+    // right fields. No values are written to Webflow.
+    _probe: {
+      allKeys: Object.keys(raw ?? {}),
+      min_annual_salary: raw?.min_annual_salary,
+      max_annual_salary: raw?.max_annual_salary,
+      salary_type: raw?.salary_type,
+      currency_id: raw?.currency_id,
+      currency: raw?.currency,
+    },
   };
 }
 
