@@ -68,6 +68,24 @@ export function getCustomField(raw, ...names) {
   return null;
 }
 
+// RecruitCRM returns the salary currency as a numeric currency_id, not a code. Map the IDs
+// in use to ISO codes. Confirmed by Azara from live roles: 133 = AED (Job 24), 101 = SAR
+// (Job 20). EXTEND this when a new currency appears (send the id → code). An unmapped id
+// resolves to null, which fails closed (Salary left empty) rather than guessing.
+export const CURRENCY_BY_ID = {
+  133: "AED",
+  101: "SAR",
+};
+
+// salary_type arrives as { id, label } e.g. { id: 1, label: "Monthly Salary" }. Reduce it to
+// the canonical period the formatter expects, or null when unrecognised (fail-closed).
+function salaryPeriodFrom(salaryType) {
+  const label = String(salaryType?.label ?? "").toLowerCase();
+  if (label.includes("month")) return "Monthly";
+  if (label.includes("annual") || label.includes("year")) return "Annual";
+  return null;
+}
+
 // Turn a raw RecruitCRM job into the shape mapJob expects.
 export function normalizeJob(raw) {
   const city = raw.city ?? "";
@@ -82,6 +100,8 @@ export function normalizeJob(raw) {
     "";
 
   const toNum = (v) => (v === null || v === undefined || v === "" ? null : Number(v));
+  const toBool = (v) =>
+    v === true || ["1", "true", "yes", "y", "on"].includes(String(v ?? "").trim().toLowerCase());
 
   // Explicit values the recruiter records in RecruitCRM custom fields. When present
   // these are authoritative; mapJob falls back to inference only when they are absent.
@@ -112,17 +132,17 @@ export function normalizeJob(raw) {
     // enable_job_application_form (1 = ticked). Strict opt-in — only an explicit 1
     // advertises, so an untick (or a job that never had it) stays off the site.
     advertise: Number(raw.enable_job_application_form) === 1,
-    // TEMP salary-field probe (read-only diagnostic; removed once field names confirmed).
-    // Surfaces the raw native salary keys/values so the connector can be pointed at the
-    // right fields. No values are written to Webflow.
-    _probe: {
-      allKeys: Object.keys(raw ?? {}),
-      min_annual_salary: raw?.min_annual_salary,
-      max_annual_salary: raw?.max_annual_salary,
-      salary_type: raw?.salary_type,
-      currency_id: raw?.currency_id,
-      currency: raw?.currency,
-    },
+    // --- Salary pipeline --------------------------------------------------------
+    // Min/Max/period/currency are RecruitCRM NATIVE job fields (top-level), confirmed by a
+    // live probe. The disclose flag is NOT in the jobs API, so it comes from a custom
+    // "Disclose Salary" (Yes/No) dropdown instead. Currency is a numeric id mapped via
+    // CURRENCY_BY_ID. Fail-closed throughout (unmapped/unset → null; the formatter leaves
+    // Salary empty rather than guessing).
+    salaryDisclosed: toBool(getCustomField(raw, "Disclose Salary")),
+    salaryMin: toNum(raw.min_annual_salary),
+    salaryMax: toNum(raw.max_annual_salary),
+    salaryCurrency: CURRENCY_BY_ID[raw.currency_id] ?? null,
+    salaryPeriod: salaryPeriodFrom(raw.salary_type),
   };
 }
 

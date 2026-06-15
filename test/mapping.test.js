@@ -220,8 +220,31 @@ test("pickUpdateableFields drops excluded keys", () => {
 test("UPDATEABLE_FIELDS list is the conservative set we expect", () => {
   assert.deepEqual([...UPDATEABLE_FIELDS].sort(), [
     "apply-url", "employment-type", "full-description", "location", "name",
-    "overview", "pqe-max", "pqe-min", "practice-area", "practice-setting", "seniority",
+    "overview", "pqe-max", "pqe-min", "practice-area", "practice-setting", "salary", "seniority",
   ]);
+});
+
+test("mapJob writes the formatted Salary for a disclosed band", () => {
+  const { fieldData } = mapJob({
+    ...sampleJob,
+    salaryDisclosed: true, salaryMin: 50000, salaryMax: 70000,
+    salaryCurrency: "AED", salaryPeriod: "Monthly",
+  });
+  assert.equal(fieldData["salary"], "AED 50,000 - 70,000 per month");
+});
+
+test("mapJob writes the negotiable line for an undisclosed role", () => {
+  const { fieldData } = mapJob({ ...sampleJob, salaryDisclosed: false });
+  assert.equal(fieldData["salary"], "Salary / package negotiable");
+});
+
+test("mapJob: disclosed-but-invalid salary leaves Salary empty + warns (fail-closed)", () => {
+  const { fieldData, findings } = mapJob({
+    ...sampleJob,
+    salaryDisclosed: true, salaryMin: null, salaryCurrency: null, salaryPeriod: "Monthly",
+  });
+  assert.ok(!("salary" in fieldData), "no guessed salary written");
+  assert.ok(findings.some((f) => f.field === "salary" && f.severity === "warn"));
 });
 
 test("mapJob enforces hard rules and maps the sample job cleanly", () => {

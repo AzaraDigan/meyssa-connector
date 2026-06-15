@@ -32,4 +32,8 @@ export const FIELD_SLUGS = {
   clientName: "client-name",
   overview: "overview",
   fullDescription: "full-description",
+  // Salary pipeline (v1: a single plain-text field per Yusra's brief). The connector only
+  // writes this once formatSalary() is un-stubbed AND the field exists in the Opportunities
+  // collection. VERIFY the slug against the live schema before enabling.
+  salary: "salary",
 };

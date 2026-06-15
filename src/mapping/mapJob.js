@@ -21,6 +21,7 @@ import {
 } from "./transforms.js";
 import { inferPracticeArea, inferSeniority } from "./infer.js";
 import { parseSections, buildFullDescriptionHtml } from "./description.js";
+import { salaryInputs, formatSalary } from "./salary.js";
 
 // Generic, anonymised client descriptor by practice setting, used only when the
 // recruiter has not supplied an explicit "Client Descriptor" custom field. Never
@@ -116,6 +117,20 @@ export function mapJob(job, opts = {}) {
     });
   }
 
+  // Salary: the formatter returns the display string for disclosed bands and the negotiable
+  // line for undisclosed roles. It returns null only when a role is marked disclosed but its
+  // data is missing/invalid — fail-closed (founder rule #5): leave the field empty and warn.
+  const salaryDisplay = formatSalary(salaryInputs(job));
+  if (salaryDisplay != null) {
+    fieldData[FIELD_SLUGS.salary] = salaryDisplay;
+  } else if (job.salaryDisclosed === true) {
+    findings.push({
+      field: "salary",
+      severity: "warn",
+      note: "Salary marked disclosed but values are missing/invalid (need Currency, Min > 0, and Period Annual/Monthly); Salary left empty.",
+    });
+  }
+
   return { fieldData, unmapped, findings };
 }
 
@@ -145,6 +160,7 @@ export const UPDATEABLE_FIELDS = [
   FIELD_SLUGS.applyUrl,
   FIELD_SLUGS.overview,
   FIELD_SLUGS.fullDescription,
+  FIELD_SLUGS.salary,
 ];
 
 // For a job whose advertise gate is OFF (Enable Job Application Form unticked): if it is

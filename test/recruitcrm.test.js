@@ -119,3 +119,66 @@ test("normalized RecruitCRM job 2 (Riyadh) maps cleanly with explicit In-House f
   assert.equal(fieldData["practice-setting"], "7f3830ba550d51aeec7bb7125d3f83ad"); // In-House
   assert.equal(unmapped.length, 0, `expected no unmapped fields, got ${JSON.stringify(unmapped)}`);
 });
+
+test("normalizeJob reads NATIVE salary fields + Disclose Salary custom field + currency map", () => {
+  // AED + Monthly + disclosed (Job 24 shape).
+  const a = normalizeJob({
+    id: 24,
+    min_annual_salary: 50000,
+    max_annual_salary: 70000,
+    salary_type: { id: 1, label: "Monthly Salary" },
+    currency_id: 133,
+    custom_fields: [{ field_name: "Disclose Salary", value: "Yes" }],
+  });
+  assert.equal(a.salaryDisclosed, true);
+  assert.equal(a.salaryMin, 50000);
+  assert.equal(a.salaryMax, 70000);
+  assert.equal(a.salaryCurrency, "AED");
+  assert.equal(a.salaryPeriod, "Monthly");
+
+  // SAR + Annual + not disclosed (Job 20 shape).
+  const b = normalizeJob({
+    id: 20,
+    min_annual_salary: 300000,
+    max_annual_salary: 5000000,
+    salary_type: { id: 2, label: "Annual Salary" },
+    currency_id: 101,
+    custom_fields: [{ field_name: "Disclose Salary", value: "No" }],
+  });
+  assert.equal(b.salaryCurrency, "SAR");
+  assert.equal(b.salaryPeriod, "Annual");
+  assert.equal(b.salaryDisclosed, false);
+
+  // Unmapped currency id + no Disclose Salary field → fail-closed nulls/false.
+  const c = normalizeJob({ id: 99, min_annual_salary: 1000, currency_id: 999 });
+  assert.equal(c.salaryCurrency, null);
+  assert.equal(c.salaryDisclosed, false);
+});
+
+test("salary end-to-end: a Dubai AED role renders 'AED 50,000 - 70,000 per month'", () => {
+  const raw = {
+    id: 24,
+    name: "Hospitality Lawyer",
+    slug: "24-hospitality-lawyer",
+    city: "Dubai",
+    country: "United Arab Emirates",
+    job_description_text:
+      "<h3>Listing Snippet</h3><p>Regional real estate developer hiring a hospitality lawyer.</p>" +
+      "<h3>Role overview</h3><p>Manage HMAs and F&B contracts.</p>" +
+      "<h3>Key responsibilities</h3><ul><li>HMAs</li><li>F&B</li></ul>" +
+      "<h3>Candidate profile</h3><ul><li>5 PQE</li><li>Real estate</li></ul>",
+    min_annual_salary: 50000,
+    max_annual_salary: 70000,
+    salary_type: { id: 1, label: "Monthly Salary" },
+    currency_id: 133,
+    enable_job_application_form: 1,
+    custom_fields: [
+      { field_name: "PP/In-House", value: "Private Practice" },
+      { field_name: "Practice Area", value: "Real Estate" },
+      { field_name: "Seniority", value: "Senior Associate" },
+      { field_name: "Disclose Salary", value: "Yes" },
+    ],
+  };
+  const { fieldData } = mapJob(normalizeJob(raw));
+  assert.equal(fieldData["salary"], "AED 50,000 - 70,000 per month");
+});
