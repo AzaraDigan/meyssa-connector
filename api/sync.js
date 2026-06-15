@@ -141,9 +141,6 @@ export default async function handler(req, res) {
     }
 
     const summary = report.summary();
-    // TEMP salary-field probe: surface the raw native salary fields in the response so the
-    // field names/shapes can be confirmed from the run log. Removed once mapping is fixed.
-    summary.salaryProbe = jobs.map((j) => ({ id: j.id, ...j._probe }));
     log.info("sync complete", summary);
     res.status(200).json(summary);
   } catch (err) {
