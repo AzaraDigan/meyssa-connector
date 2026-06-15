@@ -171,7 +171,7 @@ test("pickUpdateableFields drops excluded keys", () => {
 test("UPDATEABLE_FIELDS list is the conservative set we expect", () => {
   assert.deepEqual([...UPDATEABLE_FIELDS].sort(), [
     "apply-url", "employment-type", "full-description", "location", "name",
-    "overview", "pqe-max", "pqe-min", "practice-area", "practice-setting", "seniority",
+    "overview", "pqe-max", "pqe-min", "practice-area", "practice-setting", "salary", "seniority",
   ]);
 });
 
@@ -219,13 +219,28 @@ test("practice-setting: casing/whitespace is tolerated on an explicit value", ()
   assert.ok(!unmapped.some((u) => u.field === "practice-setting"));
 });
 
-test("mapJob omits the Salary field while formatSalary is stubbed (fail-closed)", () => {
+test("mapJob writes the formatted Salary for a disclosed band", () => {
   const { fieldData } = mapJob({
     ...sampleJob,
     salaryDisclosed: true, salaryMin: 200000, salaryMax: 250000,
     salaryCurrency: "USD", salaryPeriod: "Annual",
   });
-  assert.ok(!("salary" in fieldData), "no salary is written until formatSalary() is un-stubbed");
+  assert.equal(fieldData["salary"], "USD 200,000 - 250,000 per year");
+});
+
+test("mapJob writes the negotiable line for an undisclosed role", () => {
+  const { fieldData } = mapJob({ ...sampleJob, salaryDisclosed: false });
+  assert.equal(fieldData["salary"], "Salary / package negotiable");
+});
+
+test("mapJob: disclosed-but-invalid salary leaves Salary empty + warns (fail-closed)", () => {
+  const { fieldData, findings } = mapJob({
+    ...sampleJob,
+    salaryDisclosed: true, salaryMin: null, salaryMax: null,
+    salaryCurrency: "USD", salaryPeriod: "Annual",
+  });
+  assert.ok(!("salary" in fieldData), "no guessed salary written");
+  assert.ok(findings.some((f) => f.field === "salary" && f.severity === "warn"), "a warning is logged");
 });
 
 test("unadvertisedClosure: stage Closed only for a live item, leave others alone", () => {
