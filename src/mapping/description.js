@@ -41,10 +41,14 @@ export function buildFullDescriptionHtml({ overview = "", responsibilities = [],
   );
 }
 
-// Heuristic split of a raw description into the three sections, keyed on the
-// expected headings. Returns { overview, responsibilities[], profile[], complete }.
-// `complete` is true only when all three sections were found.
+// Heuristic split of a raw description into sections, keyed on the expected headings.
+// Returns { listingSnippet, overview, responsibilities[], profile[], complete }.
+// `listingSnippet` is a short 2-line summary for the website listing card — separate from
+// `overview` (the Role Overview that opens the detail page). It is NOT part of `complete`:
+// its absence is handled by mapJob (fail-closed), not by blocking the detail body.
+// `complete` is true only when the three detail sections were found.
 const HEADINGS = {
+  listingSnippet: /listing snippet/i,
   overview: /role overview/i,
   responsibilities: /key responsibilities/i,
   profile: /candidate profile/i,
@@ -52,7 +56,7 @@ const HEADINGS = {
 
 export function parseSections(raw) {
   const text = String(raw ?? "");
-  const result = { overview: "", responsibilities: [], profile: [], complete: false };
+  const result = { listingSnippet: "", overview: "", responsibilities: [], profile: [], complete: false };
   if (!text.trim()) return result;
 
   // Work on plain-ish lines. Strip simple HTML tags so this works whether the
@@ -66,10 +70,13 @@ export function parseSections(raw) {
 
   let current = null;
   for (const line of lines) {
+    if (HEADINGS.listingSnippet.test(line)) { current = "listingSnippet"; continue; }
     if (HEADINGS.overview.test(line)) { current = "overview"; continue; }
     if (HEADINGS.responsibilities.test(line)) { current = "responsibilities"; continue; }
     if (HEADINGS.profile.test(line)) { current = "profile"; continue; }
-    if (current === "overview") {
+    if (current === "listingSnippet") {
+      result.listingSnippet = result.listingSnippet ? `${result.listingSnippet} ${line}` : line;
+    } else if (current === "overview") {
       result.overview = result.overview ? `${result.overview} ${line}` : line;
     } else if (current === "responsibilities") {
       // Drop a lead-in line that ends in a colon (e.g. "You will:") sitting just

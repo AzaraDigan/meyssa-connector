@@ -121,6 +121,55 @@ test("parseSections drops a lead-in line ending in a colon before the bullets", 
   assert.deepEqual(s.profile, ["5 years"]);
 });
 
+test("parseSections extracts the Listing Snippet separately from Role overview", () => {
+  const raw =
+    "Listing Snippet\nInternational firm with a growing funds practice in the Middle East. Hands-on fund formation work across DIFC and ADGM structures for an expanding GCC client base.\n" +
+    "Role overview\nThe full opening paragraph of the role detail page.\n" +
+    "Key responsibilities\nDo a thing\nDo another\n" +
+    "Candidate profile\n5 years\nCommon law";
+  const s = parseSections(raw);
+  assert.match(s.listingSnippet, /growing funds practice/);
+  assert.match(s.overview, /full opening paragraph/);
+  assert.ok(!/full opening paragraph/.test(s.listingSnippet), "snippet must not absorb the role overview");
+  assert.ok(s.complete);
+});
+
+test("mapJob maps the Listing Snippet to Overview, leaving Role overview for the detail page", () => {
+  const job = {
+    ...sampleJob,
+    description:
+      "<h3>Listing Snippet</h3><p>International firm with a growing funds practice in the Middle East. Hands-on fund formation work across DIFC and ADGM structures for an expanding GCC client base.</p>" +
+      "<h3>Role overview</h3><p>The detail-page opening paragraph, which is longer and different from the snippet.</p>" +
+      "<h3>Key responsibilities</h3><ul><li>Fund formation</li><li>Structuring</li></ul>" +
+      "<h3>Candidate profile</h3><ul><li>5 PQE</li><li>Funds experience</li></ul>",
+  };
+  const { fieldData, unmapped } = mapJob(job);
+  assert.match(fieldData["overview"], /growing funds practice/);
+  assert.ok(!/detail-page opening paragraph/.test(fieldData["overview"]), "Overview must be the snippet, not the role overview");
+  // Role overview still drives the detail-page body.
+  assert.match(fieldData["full-description"], /detail-page opening paragraph/);
+  assert.equal(unmapped.length, 0);
+});
+
+test("mapJob: missing Listing Snippet leaves Overview unwritten + warns (fail-closed, not held)", () => {
+  const job = {
+    ...sampleJob,
+    description:
+      "<h3>Role overview</h3><p>Only the role overview, no listing snippet.</p>" +
+      "<h3>Key responsibilities</h3><ul><li>A</li><li>B</li></ul>" +
+      "<h3>Candidate profile</h3><ul><li>X</li><li>Y</li></ul>",
+  };
+  const { fieldData, unmapped, findings } = mapJob(job);
+  assert.ok(!("overview" in fieldData), "Overview is omitted (not guessed) when the snippet is missing");
+  assert.ok(findings.some((f) => f.field === "overview" && f.severity === "warn"), "a warning is logged");
+  assert.ok(!unmapped.some((u) => u.field === "overview"), "missing snippet does not hold the whole role");
+});
+
+test("diffUpdateable leaves Overview untouched when the mapper omits it (missing snippet)", () => {
+  const changes = diffUpdateable({ name: "Same" }, { overview: "Existing overview", name: "Same" });
+  assert.ok(!("overview" in changes), "omitted overview is not flagged as a change");
+});
+
 test("diffUpdateable returns only changed updateable fields and ignores excluded ones", () => {
   const existing = {
     name: "Old Title",

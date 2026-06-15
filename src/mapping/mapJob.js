@@ -75,10 +75,6 @@ export function mapJob(job, opts = {}) {
   }
   const fullDescription = buildFullDescriptionHtml(sections);
 
-  // Overview from the parsed overview text (or the raw description as fallback).
-  const overviewResult = buildOverview(sections.overview || job.description);
-  findings.push(...overviewResult.findings);
-
   const postedDate = job.createdDate ? new Date(job.createdDate).toISOString() : null;
   const validThrough = postedDate ? validThroughFrom(postedDate) : null;
 
@@ -99,9 +95,26 @@ export function mapJob(job, opts = {}) {
     [FIELD_SLUGS.validThrough]: validThrough,
     [FIELD_SLUGS.confidential]: true, // hard rule: always true
     [FIELD_SLUGS.clientName]: clientDescriptor, // hard rule: never the real client name
-    [FIELD_SLUGS.overview]: overviewResult.text,
     [FIELD_SLUGS.fullDescription]: fullDescription,
   };
+
+  // Overview (the listing-card subtitle) comes from the dedicated "Listing Snippet" section,
+  // NOT the Role Overview (which remains the opening of the detail page via full-description).
+  // Fail-closed (founder rule #5): if the snippet is missing, do NOT guess from the role
+  // overview or raw description. Omit Overview — so on update an existing value is preserved
+  // (not blanked) — and log a warning. Overview is a required Webflow field, so a brand-new
+  // role with no snippet will fail to create until one is added; existing roles are untouched.
+  if (sections.listingSnippet && sections.listingSnippet.trim()) {
+    const overviewResult = buildOverview(sections.listingSnippet);
+    findings.push(...overviewResult.findings);
+    fieldData[FIELD_SLUGS.overview] = overviewResult.text;
+  } else {
+    findings.push({
+      field: "overview",
+      severity: "warn",
+      note: "Listing Snippet section missing from Job Description — Overview left unchanged (not guessed). Add a 'Listing Snippet' heading + 2-line summary to the role.",
+    });
+  }
 
   return { fieldData, unmapped, findings };
 }
@@ -160,8 +173,11 @@ export function pickUpdateableFields(fieldData) {
 export function diffUpdateable(newFieldData, existingFieldData) {
   const changes = {};
   for (const k of UPDATEABLE_FIELDS) {
-    if (!shallowEqual(newFieldData?.[k], existingFieldData?.[k])) {
-      changes[k] = newFieldData?.[k];
+    // A field the mapper did not produce this run (e.g. overview when the Listing Snippet
+    // is missing) is left as-is — never treated as a change to be cleared/overwritten.
+    if (!(k in (newFieldData ?? {}))) continue;
+    if (!shallowEqual(newFieldData[k], existingFieldData?.[k])) {
+      changes[k] = newFieldData[k];
     }
   }
   return changes;
