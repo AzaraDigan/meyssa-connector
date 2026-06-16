@@ -26,25 +26,25 @@ test("formatSalary case 2 — disclosed band with a real max → range, period-a
   );
 });
 
-test("formatSalary case 1 — Max = 5,000,000 sentinel → open-ended base+", () => {
+test("formatSalary case 1 — Max = 5,000,000 sentinel → open-ended +", () => {
   assert.equal(
     formatSalary({ disclosed: true, min: 200000, max: 5000000, currency: "USD", period: "Annual" }),
-    "USD 200,000 base+ per year",
+    "USD 200,000+ per year",
   );
   assert.equal(
     formatSalary({ disclosed: true, min: 50000, max: 5000000, currency: "AED", period: "Monthly" }),
-    "AED 50,000 base+ per month",
+    "AED 50,000+ per month",
   );
 });
 
 test("formatSalary case 3 — not disclosed (or flag empty) → negotiable line", () => {
-  assert.equal(formatSalary({ disclosed: false }), "Salary / package negotiable");
+  assert.equal(formatSalary({ disclosed: false }), "Package negotiable");
   assert.equal(
     formatSalary({ disclosed: false, min: 200000, max: 250000, currency: "USD", period: "Annual" }),
-    "Salary / package negotiable",
+    "Package negotiable",
   );
-  assert.equal(formatSalary({}), "Salary / package negotiable");
-  assert.equal(formatSalary(null), "Salary / package negotiable");
+  assert.equal(formatSalary({}), "Package negotiable");
+  assert.equal(formatSalary(null), "Package negotiable");
 });
 
 test("formatSalary fail-closed — disclosed but data missing/invalid → null", () => {
@@ -61,6 +61,6 @@ test("formatSalary fail-closed — disclosed but data missing/invalid → null",
 test("formatSalary tolerates currency whitespace and period casing", () => {
   assert.equal(
     formatSalary({ disclosed: true, min: 110000, max: 5000000, currency: " GBP ", period: "annual" }),
-    "GBP 110,000 base+ per year",
+    "GBP 110,000+ per year",
   );
 });

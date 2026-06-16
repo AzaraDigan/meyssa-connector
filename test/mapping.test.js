@@ -235,7 +235,7 @@ test("mapJob writes the formatted Salary for a disclosed band", () => {
 
 test("mapJob writes the negotiable line for an undisclosed role", () => {
   const { fieldData } = mapJob({ ...sampleJob, salaryDisclosed: false });
-  assert.equal(fieldData["salary"], "Salary / package negotiable");
+  assert.equal(fieldData["salary"], "Package negotiable");
 });
 
 test("mapJob: disclosed-but-invalid salary leaves Salary empty + warns (fail-closed)", () => {
