@@ -40,7 +40,7 @@ export function salaryInputs(job) {
  *
  *   1. Disclosed + Max === 5,000,000 sentinel  -> "[Cur] [Min]+ per [period]"
  *   2. Disclosed + real Max                     -> "[Cur] [Min] - [Max] per [period]"
- *   3. Not disclosed (or flag empty)            -> "Package negotiable"
+ *   3. Not disclosed (or flag empty)            -> "Negotiable"
  *
  * The surfaces (card / detail page) add their own "Salary:" label; this returns the value only.
  *
@@ -51,7 +51,7 @@ export function salaryInputs(job) {
  */
 export function formatSalary(inputs) {
   // Case 3: not disclosed -> a deliberate negotiable value (not empty).
-  if (!inputs || inputs.disclosed !== true) return "Package negotiable";
+  if (!inputs || inputs.disclosed !== true) return "Negotiable";
 
   const { min, max, currency, period } = inputs;
   const periodLabel = PERIOD_LABEL[String(period ?? "").trim().toLowerCase()];

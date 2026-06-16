@@ -38,13 +38,13 @@ test("formatSalary case 1 — Max = 5,000,000 sentinel → open-ended +", () => 
 });
 
 test("formatSalary case 3 — not disclosed (or flag empty) → negotiable line", () => {
-  assert.equal(formatSalary({ disclosed: false }), "Package negotiable");
+  assert.equal(formatSalary({ disclosed: false }), "Negotiable");
   assert.equal(
     formatSalary({ disclosed: false, min: 200000, max: 250000, currency: "USD", period: "Annual" }),
-    "Package negotiable",
+    "Negotiable",
   );
-  assert.equal(formatSalary({}), "Package negotiable");
-  assert.equal(formatSalary(null), "Package negotiable");
+  assert.equal(formatSalary({}), "Negotiable");
+  assert.equal(formatSalary(null), "Negotiable");
 });
 
 test("formatSalary fail-closed — disclosed but data missing/invalid → null", () => {
