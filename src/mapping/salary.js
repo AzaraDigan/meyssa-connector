@@ -38,9 +38,11 @@ export function salaryInputs(job) {
 /**
  * Format the Salary display string (signed-off spec, period-aware).
  *
- *   1. Disclosed + Max === 5,000,000 sentinel  -> "[Cur] [Min] base+ per [period]"
+ *   1. Disclosed + Max === 5,000,000 sentinel  -> "[Cur] [Min]+ per [period]"
  *   2. Disclosed + real Max                     -> "[Cur] [Min] - [Max] per [period]"
- *   3. Not disclosed (or flag empty)            -> "Salary / package negotiable"
+ *   3. Not disclosed (or flag empty)            -> "Package negotiable"
+ *
+ * The surfaces (card / detail page) add their own "Salary:" label; this returns the value only.
  *
  * Fail-closed: a disclosed role with missing/invalid currency, min, period, or a malformed
  * max returns null (mapJob leaves the field empty + warns). Never guesses.
@@ -48,8 +50,8 @@ export function salaryInputs(job) {
  * @returns {string|null} the display string, or null to leave the field empty
  */
 export function formatSalary(inputs) {
-  // Case 3: not disclosed -> a deliberate negotiable line (not empty).
-  if (!inputs || inputs.disclosed !== true) return "Salary / package negotiable";
+  // Case 3: not disclosed -> a deliberate negotiable value (not empty).
+  if (!inputs || inputs.disclosed !== true) return "Package negotiable";
 
   const { min, max, currency, period } = inputs;
   const periodLabel = PERIOD_LABEL[String(period ?? "").trim().toLowerCase()];
@@ -59,9 +61,9 @@ export function formatSalary(inputs) {
   // Fail-closed on missing/invalid disclosed data.
   if (!cur || !periodLabel || !minOk) return null;
 
-  // Case 1: no max disclosed (sentinel) -> open-ended "base+".
+  // Case 1: no max disclosed (sentinel) -> open-ended "[Min]+".
   if (max === NO_MAX_SENTINEL) {
-    return `${cur} ${formatThousands(min)} base+ ${periodLabel}`;
+    return `${cur} ${formatThousands(min)}+ ${periodLabel}`;
   }
 
   // Case 2: a real max -> range. A malformed max (non-integer or below min) fails closed.
