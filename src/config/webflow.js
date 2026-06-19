@@ -36,4 +36,11 @@ export const FIELD_SLUGS = {
   // writes this once formatSalary() is un-stubbed AND the field exists in the Opportunities
   // collection. VERIFY the slug against the live schema before enabling.
   salary: "salary",
+  // Salary pipeline (v2): structured components for the JobPosting baseSalary JSON-LD.
+  // Written alongside `salary`; all four left empty for undisclosed/invalid roles so the
+  // detail-page embed omits baseSalary. Created on the Opportunities collection 2026-06-19.
+  salaryMin: "salary-min",
+  salaryMax: "salary-max",
+  salaryCurrency: "salary-currency",
+  salaryPeriod: "salary-period",
 };

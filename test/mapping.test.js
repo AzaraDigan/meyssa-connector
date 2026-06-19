@@ -220,7 +220,8 @@ test("pickUpdateableFields drops excluded keys", () => {
 test("UPDATEABLE_FIELDS list is the conservative set we expect", () => {
   assert.deepEqual([...UPDATEABLE_FIELDS].sort(), [
     "apply-url", "employment-type", "full-description", "location", "name",
-    "overview", "pqe-max", "pqe-min", "practice-area", "practice-setting", "salary", "seniority",
+    "overview", "pqe-max", "pqe-min", "practice-area", "practice-setting",
+    "salary", "salary-currency", "salary-max", "salary-min", "salary-period", "seniority",
   ]);
 });
 
@@ -245,6 +246,52 @@ test("mapJob: disclosed-but-invalid salary leaves Salary empty + warns (fail-clo
   });
   assert.ok(!("salary" in fieldData), "no guessed salary written");
   assert.ok(findings.some((f) => f.field === "salary" && f.severity === "warn"));
+});
+
+// Structured salary fields (v2) — the source for the JobPosting baseSalary JSON-LD.
+// Acceptance cases mirror the brief: full band, sentinel (min only), Negotiable (empty).
+
+test("mapJob writes the structured salary parts for a disclosed band (job 24 case)", () => {
+  const { fieldData } = mapJob({
+    ...sampleJob,
+    salaryDisclosed: true, salaryMin: 50000, salaryMax: 70000,
+    salaryCurrency: "AED", salaryPeriod: "Monthly",
+  });
+  assert.equal(fieldData["salary-min"], 50000);
+  assert.equal(fieldData["salary-max"], 70000);
+  assert.equal(fieldData["salary-currency"], "AED");
+  assert.equal(fieldData["salary-period"], "MONTH");
+});
+
+test("mapJob: sentinel max → salary-max empty (min only), never the 5,000,000 number", () => {
+  const { fieldData } = mapJob({
+    ...sampleJob,
+    salaryDisclosed: true, salaryMin: 70000, salaryMax: 5000000,
+    salaryCurrency: "SAR", salaryPeriod: "Monthly",
+  });
+  assert.equal(fieldData["salary-min"], 70000);
+  assert.equal(fieldData["salary-max"], null, "sentinel must never be written as a number");
+  assert.equal(fieldData["salary-currency"], "SAR");
+  assert.equal(fieldData["salary-period"], "MONTH");
+});
+
+test("mapJob: undisclosed (Negotiable) → all four structured salary fields cleared", () => {
+  const { fieldData } = mapJob({ ...sampleJob, salaryDisclosed: false });
+  // Always present (so a flip to undisclosed CLEARS them on update), but null.
+  for (const k of ["salary-min", "salary-max", "salary-currency", "salary-period"]) {
+    assert.ok(k in fieldData, `${k} is written so it can be cleared on update`);
+    assert.equal(fieldData[k], null, `${k} is empty for an undisclosed role`);
+  }
+});
+
+test("mapJob: disclosed-but-invalid → structured salary fields cleared (fail-closed)", () => {
+  const { fieldData } = mapJob({
+    ...sampleJob,
+    salaryDisclosed: true, salaryMin: null, salaryCurrency: null, salaryPeriod: "Monthly",
+  });
+  for (const k of ["salary-min", "salary-max", "salary-currency", "salary-period"]) {
+    assert.equal(fieldData[k], null, `${k} is empty when disclosed data is invalid`);
+  }
 });
 
 test("mapJob enforces hard rules and maps the sample job cleanly", () => {

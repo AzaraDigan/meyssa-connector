@@ -21,7 +21,7 @@ import {
 } from "./transforms.js";
 import { inferPracticeArea, inferSeniority } from "./infer.js";
 import { parseSections, buildFullDescriptionHtml } from "./description.js";
-import { salaryInputs, formatSalary } from "./salary.js";
+import { salaryInputs, formatSalary, structuredSalary } from "./salary.js";
 
 // Generic, anonymised client descriptor by practice setting, used only when the
 // recruiter has not supplied an explicit "Client Descriptor" custom field. Never
@@ -120,7 +120,8 @@ export function mapJob(job, opts = {}) {
   // Salary: the formatter returns the display string for disclosed bands and the negotiable
   // line for undisclosed roles. It returns null only when a role is marked disclosed but its
   // data is missing/invalid — fail-closed (founder rule #5): leave the field empty and warn.
-  const salaryDisplay = formatSalary(salaryInputs(job));
+  const salaryInputsForJob = salaryInputs(job);
+  const salaryDisplay = formatSalary(salaryInputsForJob);
   if (salaryDisplay != null) {
     fieldData[FIELD_SLUGS.salary] = salaryDisplay;
   } else if (job.salaryDisclosed === true) {
@@ -130,6 +131,17 @@ export function mapJob(job, opts = {}) {
       note: "Salary marked disclosed but values are missing/invalid (need Currency, Min > 0, and Period Annual/Monthly); Salary left empty.",
     });
   }
+
+  // Structured salary components for the JobPosting baseSalary JSON-LD (Devansh assembles
+  // baseSalary in the detail-page embed from these). Always written — including the all-null
+  // case — so a role that flips to undisclosed/invalid has the fields CLEARED, not preserved.
+  // Same fail-closed gates as formatSalary, so the structured fields never disagree with the
+  // display string (both populated together, both empty together).
+  const salaryParts = structuredSalary(salaryInputsForJob);
+  fieldData[FIELD_SLUGS.salaryMin] = salaryParts.min;
+  fieldData[FIELD_SLUGS.salaryMax] = salaryParts.max;
+  fieldData[FIELD_SLUGS.salaryCurrency] = salaryParts.currency;
+  fieldData[FIELD_SLUGS.salaryPeriod] = salaryParts.period;
 
   return { fieldData, unmapped, findings };
 }
@@ -161,6 +173,10 @@ export const UPDATEABLE_FIELDS = [
   FIELD_SLUGS.overview,
   FIELD_SLUGS.fullDescription,
   FIELD_SLUGS.salary,
+  FIELD_SLUGS.salaryMin,
+  FIELD_SLUGS.salaryMax,
+  FIELD_SLUGS.salaryCurrency,
+  FIELD_SLUGS.salaryPeriod,
 ];
 
 // For a job whose advertise gate is OFF (Enable Job Application Form unticked): if it is
