@@ -16,6 +16,12 @@ const PERIOD_LABEL = {
   monthly: "per month", month: "per month",
 };
 
+// schema.org QuantitativeValue.unitText for the structured baseSalary (Google for Jobs).
+const PERIOD_UNIT = {
+  annual: "YEAR", annually: "YEAR", yearly: "YEAR", year: "YEAR",
+  monthly: "MONTH", month: "MONTH",
+};
+
 // Thousands separators for integers, no locale/ICU dependency: 200000 -> "200,000".
 function formatThousands(n) {
   return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -69,4 +75,46 @@ export function formatSalary(inputs) {
   // Case 2: a real max -> range. A malformed max (non-integer or below min) fails closed.
   if (!Number.isInteger(max) || max < min) return null;
   return `${cur} ${formatThousands(min)} - ${formatThousands(max)} ${periodLabel}`;
+}
+
+/**
+ * Structured salary components for the JobPosting `baseSalary` JSON-LD (Google for Jobs).
+ * Devansh assembles the MonetaryAmount in the detail-page embed from these CMS fields.
+ *
+ *   1. Disclosed + Max === 5,000,000 sentinel  -> { min, max: null, currency, period }
+ *   2. Disclosed + real Max                     -> { min, max, currency, period }
+ *   3. Not disclosed / unmapped / invalid       -> all null (embed omits baseSalary)
+ *
+ * Gated on EXACTLY the same validity as formatSalary, so the structured fields and the
+ * display string never disagree: a role that shows a salary string also exposes structured
+ * values, and a role that fails closed on one fails closed on both. Fail-closed (founder
+ * rule #5): empty beats a wrong value — the sentinel is never written as 5,000,000, and an
+ * unmapped currency / unrecognised period / missing min yields all-null.
+ *
+ * `period` is returned as the schema.org unitText "MONTH" / "YEAR".
+ *
+ * @returns {{min:number|null, max:number|null, currency:string|null, period:string|null}}
+ */
+export function structuredSalary(inputs) {
+  const empty = { min: null, max: null, currency: null, period: null };
+
+  // Case 3a: not disclosed -> no structured salary (the string side shows "Negotiable").
+  if (!inputs || inputs.disclosed !== true) return empty;
+
+  const { min, max, currency, period } = inputs;
+  const unit = PERIOD_UNIT[String(period ?? "").trim().toLowerCase()];
+  const cur = typeof currency === "string" ? currency.trim() : "";
+  const minOk = Number.isInteger(min) && min > 0;
+
+  // Case 3b: missing/invalid disclosed data (unmapped currency, bad period, no positive min).
+  if (!cur || !unit || !minOk) return empty;
+
+  // Case 1: no max disclosed (sentinel) -> open-ended, write min only (never the sentinel).
+  if (max === NO_MAX_SENTINEL) {
+    return { min, max: null, currency: cur, period: unit };
+  }
+
+  // Case 2: a real max -> range. A malformed max (non-integer or below min) fails closed.
+  if (!Number.isInteger(max) || max < min) return empty;
+  return { min, max, currency: cur, period: unit };
 }
