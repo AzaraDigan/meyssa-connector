@@ -104,4 +104,21 @@ export class WebflowClient {
     );
     return { id: item.id, fieldData: item.fieldData };
   }
+
+  /**
+   * Publish specific collection items to the LIVE site. Used only to make CLOSURES
+   * go live immediately (so a cancelled role leaves the site without waiting for a
+   * human publish). Creates and updates deliberately stay staged for review — this
+   * is the one, narrow exception to "the connector never publishes".
+   * Webflow: POST /collections/{id}/items/publish, body { itemIds } (max 100 per call).
+   * @param {string[]} itemIds
+   * @returns {Promise<{ publishedItemIds: string[], errors?: unknown[] }>}
+   */
+  async publishItems(itemIds) {
+    const ids = Array.isArray(itemIds) ? itemIds.filter(Boolean) : [];
+    if (ids.length === 0) return { publishedItemIds: [] };
+    return this.#request("POST", `/collections/${this.collectionId}/items/publish`, {
+      itemIds: ids.slice(0, 100),
+    });
+  }
 }
