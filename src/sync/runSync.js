@@ -32,6 +32,11 @@ import { log, RunReport } from "../lib/logger.js";
  */
 export async function runSync({ recruitcrm, webflow, limit }) {
   const report = new RunReport();
+  // Item IDs closed this run — auto-published at the end so cancelled roles leave the
+  // LIVE site immediately. This is the one narrow exception to "never publish": only
+  // closures (which merely remove a role) go live automatically; creates and updates
+  // stay staged as drafts for a human to review and publish.
+  const closedItemIds = [];
 
   const jobs = await recruitcrm.listJobs({ limit });
   log.info("fetched jobs", { count: jobs.length, limit: limit ?? "none" });
@@ -53,6 +58,7 @@ export async function runSync({ recruitcrm, webflow, limit }) {
         try {
           await webflow.updateItem(closure.itemId, { [FIELD_SLUGS.status]: closure.status });
           report.recordClosed(job.id, closure.itemId);
+          closedItemIds.push(closure.itemId);
         } catch (err) {
           report.recordFailed(job.id, err);
         }
@@ -101,9 +107,29 @@ export async function runSync({ recruitcrm, webflow, limit }) {
       try {
         await webflow.updateItem(existing.itemId, { [FIELD_SLUGS.status]: STATUS.Closed });
         report.recordClosed(jobId, existing.itemId);
+        closedItemIds.push(existing.itemId);
       } catch (err) {
         report.recordFailed(jobId, err);
       }
+    }
+  }
+
+  // Auto-publish closures so cancelled/removed roles drop off the LIVE listing at once.
+  // Scoped to closures only: creates and updates stay staged for human review. A publish
+  // failure is logged, not thrown — the items are already staged Closed, so the next run
+  // (or a manual publish) still pushes them; the sync itself should not fail on this.
+  if (closedItemIds.length > 0) {
+    try {
+      const pub = await webflow.publishItems(closedItemIds);
+      log.info("published closures", {
+        staged: closedItemIds.length,
+        published: pub?.publishedItemIds?.length ?? 0,
+      });
+    } catch (err) {
+      log.error("closure publish failed", {
+        error: err instanceof Error ? err.message : String(err),
+        count: closedItemIds.length,
+      });
     }
   }
 
