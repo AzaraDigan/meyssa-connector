@@ -47,6 +47,24 @@ export function slugify(s) {
     .replace(/-{2,}/g, "-");
 }
 
+// Decode HTML entities from the RecruitCRM source ONCE, so downstream text is clean
+// (e.g. "M&amp;A" -> "M&A", "O&amp;M" -> "O&M"). The rich-text builder re-encodes with
+// esc() exactly once when it assembles the HTML; without this, a source that already
+// carried "&amp;" got double-encoded and rendered as "M&amp;amp;A" / "O&ampM".
+// Handles named (amp/lt/gt/quot/apos/nbsp) and numeric (&#39; / &#x27;) entities.
+const NAMED_ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+export function decodeEntities(s) {
+  if (typeof s !== "string") return s;
+  return s.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (m, code) => {
+    const key = code.toLowerCase();
+    if (key[0] === "#") {
+      const n = key[1] === "x" ? parseInt(key.slice(2), 16) : parseInt(key.slice(1), 10);
+      return Number.isFinite(n) ? String.fromCodePoint(n) : m;
+    }
+    return Object.prototype.hasOwnProperty.call(NAMED_ENTITIES, key) ? NAMED_ENTITIES[key] : m;
+  });
+}
+
 // Strip PQE band and trailing/leading city from a raw title, leaving the role name.
 export function stripTitle(rawTitle) {
   if (typeof rawTitle !== "string") return "";

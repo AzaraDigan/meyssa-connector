@@ -33,7 +33,7 @@ const PRACTICE_AREA_KEYWORDS = {
   "Corporate / M&A": ["m&a", "mergers", "acquisitions", "corporate", "private equity", "joint venture"],
   "Disputes": ["disputes", "litigation", "arbitration", "contentious"],
   "Employment": ["employment", "labour", "labor", "hr law"],
-  "Intellectual Property": ["intellectual property", "ip ", "trademark", "patent", "copyright"],
+  "Intellectual Property": ["intellectual property", "ip", "trademark", "patent", "copyright"],
   "Projects & Infrastructure": ["projects", "infrastructure", "construction", "epc", "energy"],
   "Real Estate": ["real estate", "property", "leasing", "development"],
   "Regulatory & Compliance": ["regulatory", "compliance", "aml", "sanctions"],
@@ -44,11 +44,28 @@ const PRACTICE_AREA_KEYWORDS = {
 };
 
 export function inferPracticeArea(title, description) {
-  const hay = `${title ?? ""} ${description ?? ""}`.toLowerCase();
+  // Title is the strongest signal, so try it ALONE first and only fall back to the
+  // full text. Otherwise a stray "finance"/"corporate" in the body outranks the role
+  // named in the title (a "Construction Lawyer" whose description mentioned project
+  // finance was tagged Banking & Finance).
+  return matchArea(String(title ?? "").toLowerCase())
+    ?? matchArea(`${title ?? ""} ${description ?? ""}`.toLowerCase());
+}
+
+function matchArea(hay) {
   for (const [label, keywords] of Object.entries(PRACTICE_AREA_KEYWORDS)) {
-    if (keywords.some((k) => hay.includes(k))) return label;
+    if (keywords.some((k) => matchKeyword(hay, k))) return label;
   }
   return null;
+}
+
+// Keywords match as substrings by default, EXCEPT the bare "ip" abbreviation, which
+// must be a whole word. Otherwise words like "ownership", "relationship" and
+// "leadership" false-match Intellectual Property (which is tested before Projects),
+// so a Projects/Construction role got mislabelled IP.
+function matchKeyword(hay, keyword) {
+  if (keyword === "ip") return /\bip\b/.test(hay);
+  return hay.includes(keyword);
 }
 
 // seniority: title-driven. Order matters; more specific titles checked first.

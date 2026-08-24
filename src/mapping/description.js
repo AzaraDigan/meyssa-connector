@@ -14,6 +14,7 @@
 // and mapJob flags the job for human review rather than shipping a half-built body.
 
 import { scrubDashes } from "../brand/scrub.js";
+import { decodeEntities } from "./transforms.js";
 
 function esc(s) {
   return String(s)
@@ -61,9 +62,15 @@ export function parseSections(raw) {
 
   // Work on plain-ish lines. Strip simple HTML tags so this works whether the
   // RecruitCRM description is HTML or plain text.
-  const lines = text
-    .replace(/<\/(p|li|ul|h[1-6]|div)>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
+  // Strip tags first, THEN decode entities — so any decoded "<"/">" is treated as
+  // plain text, not re-parsed as a tag. Leaves clean text ("O&M", "M&A") that esc()
+  // re-encodes exactly once when building the HTML.
+  const stripped = decodeEntities(
+    text
+      .replace(/<\/(p|li|ul|h[1-6]|div)>/gi, "\n")
+      .replace(/<[^>]+>/g, ""),
+  );
+  const lines = stripped
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean);
