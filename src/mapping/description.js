@@ -13,7 +13,8 @@
 // three headings (per the PM plan). Where it cannot find a section it returns empty,
 // and mapJob flags the job for human review rather than shipping a half-built body.
 
-import { scrubDashes } from "../brand/scrub.js";
+import { scrubDashes, stripTrailingBoilerplate } from "../brand/scrub.js";
+import { decodeEntities } from "./transforms.js";
 
 function esc(s) {
   return String(s)
@@ -61,9 +62,15 @@ export function parseSections(raw) {
 
   // Work on plain-ish lines. Strip simple HTML tags so this works whether the
   // RecruitCRM description is HTML or plain text.
-  const lines = text
-    .replace(/<\/(p|li|ul|h[1-6]|div)>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
+  // Strip tags first, THEN decode entities — so any decoded "<"/">" is treated as
+  // plain text, not re-parsed as a tag. Leaves clean text ("O&M", "M&A") that esc()
+  // re-encodes exactly once when building the HTML.
+  const stripped = decodeEntities(
+    text
+      .replace(/<\/(p|li|ul|h[1-6]|div)>/gi, "\n")
+      .replace(/<[^>]+>/g, ""),
+  );
+  const lines = stripped
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean);
@@ -88,6 +95,13 @@ export function parseSections(raw) {
       result.profile.push(line.replace(/^[-•*]\s*/, ""));
     }
   }
+
+  // Strip any trailing "About Meyssa Legal" boilerplate that the source appended after
+  // the real bullets — the site renders its own About section, so it must not show up as
+  // candidate requirements. Done before the completeness check so a role whose only
+  // "profile" content was boilerplate is correctly held for review, not shipped empty.
+  result.responsibilities = stripTrailingBoilerplate(result.responsibilities);
+  result.profile = stripTrailingBoilerplate(result.profile);
 
   result.complete = Boolean(result.overview) && result.responsibilities.length > 0 && result.profile.length > 0;
   return result;

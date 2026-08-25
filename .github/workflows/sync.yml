@@ -49,19 +49,23 @@ jobs:
           # Fail the run on a non-200 so sync failures are visible in the Actions tab.
           test "${http_code}" = "200"
 
-      - name: Warn / fail on held or failed jobs
+      - name: Warn on held jobs, fail only on hard failures
         # The HTTP call above returns 200 even when individual roles are held or fail,
         # so inspect the run summary here.
         #
-        # We split holds into two buckets (see RunReport in src/lib/logger.js):
-        #   - heldActionable: blocked by something other than the known description
-        #     backlog (e.g. a blank PP/In-House dropdown, an unmapped location). These,
-        #     and any per-job failures, FAIL the run so GitHub emails — that is the
-        #     "a role was posted wrong" signal worth interrupting for.
-        #   - heldBacklog: held ONLY on the full-description/missing-headings issue,
-        #     tracked separately. These are WARNED (annotated) but do not fail the run,
-        #     so the steady-state backlog does not spam failure emails every cycle.
-        # A fully clean sync stays green.
+        # Policy (Stanley brief, 2026-08-25): a HOLD is a warning, never a failure. This
+        # runs every 30 minutes, so failing on a hold meant one unresolved role emailed
+        # every 30 minutes indefinitely (1,202 runs before this change) — after a
+        # fortnight of identical alerts nobody reads them, which is when a real failure
+        # lands. So:
+        #   - Held roles (actionable OR description-backlog): annotate + WARN, exit 0.
+        #     They are reported once a day by the separate `held-digest` workflow, not
+        #     on every cycle.
+        #   - Failed roles (a job that errored mid-write): FAIL the run, exit 1 — GitHub
+        #     emails, because that is a genuine break worth interrupting for.
+        #
+        # Note: the annotated `job-id NN` is the RecruitCRM srNo (the number on the job in
+        # the RecruitCRM UI), NOT the API id. See README.
         run: |
           set -euo pipefail
           test -f response.json || { echo "no response.json from previous step"; exit 1; }
@@ -74,12 +78,13 @@ jobs:
           # Per-job annotations, visible inline on the Actions run.
           jq -r '.details.heldActionable[]? | "::warning title=Role held (needs review)::job-id \(.jobId) held on: \(.reason.unmapped | map(.field) | join(", "))"' response.json || true
           jq -r '.details.failed[]? | "::error title=Job failed::job-id \(.jobId) — \(.error)"' response.json || true
-          if [ "${backlog}" != "0" ]; then
-            echo "::warning title=Backlog holds::${backlog} role(s) held only on description headings (tracked separately; not failing the run)."
+          if [ "${held}" != "0" ]; then
+            echo "::warning title=Roles held::${held} role(s) held (actionable=${actionable}, backlog=${backlog}). Reported in the daily digest, not failing this run."
           fi
 
-          if [ "${actionable}" != "0" ] || [ "${failed}" != "0" ]; then
-            echo "::error::Sync needs attention — actionable holds=${actionable}, failed=${failed}. Set the PP/In-House dropdown (or fix the source) on the annotated job-ids."
+          # Only a hard per-job failure fails the run.
+          if [ "${failed}" != "0" ]; then
+            echo "::error::Sync failed on ${failed} job(s) — see the per-job annotations above."
             exit 1
           fi
-          echo "No actionable holds or failures. (Backlog holds: ${backlog}.)"
+          echo "Sync OK. Held: ${held} (actionable=${actionable}, backlog=${backlog}); failed: 0."

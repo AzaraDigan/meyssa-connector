@@ -81,6 +81,39 @@ export function lintBannedWords(text) {
   return findings;
 }
 
+// Trailing "About Meyssa Legal" boilerplate that some RecruitCRM job descriptions
+// carry at the end of the Candidate profile. The website renders its OWN About Meyssa
+// section, so these lines must never appear as candidate-profile bullets (Stanley
+// fixed 19 roles by hand on 2026-08-25; this guard stops them coming back on re-sync).
+//
+// The live boilerplate block is three lines:
+//   "About Meyssa Legal"
+//   "Meyssa Legal specialises in placing high-calibre legal professionals ..."
+//   "All applications are treated with strict confidence."
+// The client is always anonymised, so a genuine candidate-profile bullet never says
+// "Meyssa Legal" — matching it is a reliable, safe signal. We also catch the
+// confidentiality sentence, which does not name the firm.
+const BOILERPLATE_PATTERNS = [
+  /\bmeyssa\s+legal\b/i,
+  /all applications are treated/i,
+  /treated (with|in) (the )?(strict|strictest) confidence/i,
+];
+
+export function isBoilerplateLine(line) {
+  if (typeof line !== "string") return false;
+  return BOILERPLATE_PATTERNS.some((re) => re.test(line));
+}
+
+// Remove boilerplate items from the TAIL of a list (e.g. Candidate profile bullets),
+// stopping at the first genuine item so real content is never cut. Non-arrays pass
+// through unchanged.
+export function stripTrailingBoilerplate(items) {
+  if (!Array.isArray(items)) return items;
+  const out = items.slice();
+  while (out.length > 0 && isBoilerplateLine(out[out.length - 1])) out.pop();
+  return out;
+}
+
 // Convenience: scrub dashes and lint in one pass. Does not auto-change banned
 // words; that needs a human. Returns the dash-scrubbed text plus all findings.
 export function applyBrandRules(text) {
