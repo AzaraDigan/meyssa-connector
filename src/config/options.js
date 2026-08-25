@@ -42,6 +42,9 @@ export const PRACTICE_AREA = {
   "Tax": "a873a2e3a0fdb022751cd852332e0843",
   "TMT": "69eff363aa50ea5997d8d24b39aa7a0b",
   "Hospitality": "261b64c874629eb6f99f0c5613e49014",
+  // Added by Azara 2026-08-25 (Stanley brief): distinct from TMT for fintech/payments/
+  // virtual-asset mandates.
+  "Fintech": "6911dc2cd3a061dfba9cad3f438d2c73",
 };
 
 export const SENIORITY = {
@@ -54,6 +57,8 @@ export const SENIORITY = {
   "Head of Legal": "b89677db9f645ae2992f7a637f7e5821",
   "Senior Legal Counsel": "278cdd8fcfbfdbb12b42865fad8f157d",
   "Legal Counsel": "c864756ed7310c397f5948b470135190",
+  // Added by Azara 2026-08-25 (Stanley brief): junior support roles below Associate.
+  "Paralegal": "557fdf8f34f9d564723c271d8e04debb",
 };
 
 export const EMPLOYMENT_TYPE = {

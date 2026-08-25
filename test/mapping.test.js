@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { scrubDashes, lintBannedWords, applyBrandRules } from "../src/brand/scrub.js";
-import { resolveOption, LOCATION, EMPLOYMENT_TYPE } from "../src/config/options.js";
+import { scrubDashes, lintBannedWords, applyBrandRules, isBoilerplateLine, stripTrailingBoilerplate } from "../src/brand/scrub.js";
+import { resolveOption, LOCATION, EMPLOYMENT_TYPE, SENIORITY, PRACTICE_AREA } from "../src/config/options.js";
+import { inferSeniority, inferPracticeArea } from "../src/mapping/infer.js";
 import {
   normaliseLocation, buildSlug, slugify, stripTitle, parsePqe, validThroughFrom, buildOverview,
 } from "../src/mapping/transforms.js";
@@ -369,4 +370,70 @@ test("practice-setting: missing/empty/unrecognised is HELD, never defaulted to I
       `value ${JSON.stringify(value)} must be recorded as an unmapped/held field`,
     );
   }
+});
+
+// --- Stanley brief 2026-08-25: Paralegal seniority, Fintech area, boilerplate scrub ---
+
+test("inferSeniority maps a Paralegal title to Paralegal (not a PQE fallback)", () => {
+  assert.equal(inferSeniority("Litigation Paralegal (Arabic Speaking)", null), "Paralegal");
+  assert.equal(inferSeniority("Banking & Finance Paralegal", { min: 2, max: 4 }), "Paralegal");
+  // Paralegal must be a real Webflow option.
+  assert.ok(resolveOption(SENIORITY, "Paralegal"), "Paralegal must resolve to an Option id");
+});
+
+test("inferPracticeArea routes fintech to Fintech, not TMT", () => {
+  assert.equal(inferPracticeArea("Fintech Counsel", ""), "Fintech");
+  assert.equal(inferPracticeArea("Virtual Assets Lawyer", ""), "Fintech");
+  // A plain technology role still lands in TMT.
+  assert.equal(inferPracticeArea("Technology & Media Lawyer", ""), "TMT");
+  assert.ok(resolveOption(PRACTICE_AREA, "Fintech"), "Fintech must resolve to an Option id");
+});
+
+test("isBoilerplateLine catches the About Meyssa Legal block, spares real bullets", () => {
+  assert.equal(isBoilerplateLine("About Meyssa Legal"), true);
+  assert.equal(isBoilerplateLine("Meyssa Legal specialises in placing high-calibre legal professionals across the UAE"), true);
+  assert.equal(isBoilerplateLine("All applications are treated with strict confidence."), true);
+  assert.equal(isBoilerplateLine("Qualified lawyer with 5+ years' PQE in banking"), false);
+  assert.equal(isBoilerplateLine("Fluent Arabic is an advantage"), false);
+});
+
+test("stripTrailingBoilerplate removes only trailing boilerplate, keeps genuine content", () => {
+  const items = [
+    "Qualified lawyer with 5+ years' PQE",
+    "Fluent Arabic is an advantage",
+    "About Meyssa Legal",
+    "Meyssa Legal specialises in placing high-calibre legal professionals across the UAE and the wider Middle East. We offer discreet, strategic career advice and long-term relationship support.",
+    "All applications are treated with strict confidence.",
+  ];
+  const out = stripTrailingBoilerplate(items);
+  assert.deepEqual(out, [
+    "Qualified lawyer with 5+ years' PQE",
+    "Fluent Arabic is an advantage",
+  ]);
+  // A list with no boilerplate is untouched; a non-array passes through.
+  assert.deepEqual(stripTrailingBoilerplate(["a", "b"]), ["a", "b"]);
+  assert.equal(stripTrailingBoilerplate(null), null);
+});
+
+test("parseSections strips the About Meyssa Legal boilerplate from the profile", () => {
+  const raw = [
+    "Role overview",
+    "A confidential mandate for a leading firm.",
+    "Key responsibilities",
+    "- Draft and negotiate finance documents",
+    "Candidate profile",
+    "- 5+ years' PQE in banking & finance",
+    "- Fluent Arabic is an advantage",
+    "About Meyssa Legal",
+    "Meyssa Legal specialises in placing high-calibre legal professionals across the UAE and the wider Middle East.",
+    "All applications are treated with strict confidence.",
+  ].join("\n");
+  const sections = parseSections(raw);
+  assert.equal(sections.complete, true);
+  assert.ok(sections.profile.every((p) => !/meyssa legal/i.test(p)), "no Meyssa Legal line survives");
+  assert.ok(sections.profile.every((p) => !/strict confidence/i.test(p)), "no confidentiality line survives");
+  assert.deepEqual(sections.profile, [
+    "5+ years' PQE in banking & finance",
+    "Fluent Arabic is an advantage",
+  ]);
 });

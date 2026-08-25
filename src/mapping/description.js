@@ -13,7 +13,7 @@
 // three headings (per the PM plan). Where it cannot find a section it returns empty,
 // and mapJob flags the job for human review rather than shipping a half-built body.
 
-import { scrubDashes } from "../brand/scrub.js";
+import { scrubDashes, stripTrailingBoilerplate } from "../brand/scrub.js";
 import { decodeEntities } from "./transforms.js";
 
 function esc(s) {
@@ -95,6 +95,13 @@ export function parseSections(raw) {
       result.profile.push(line.replace(/^[-•*]\s*/, ""));
     }
   }
+
+  // Strip any trailing "About Meyssa Legal" boilerplate that the source appended after
+  // the real bullets — the site renders its own About section, so it must not show up as
+  // candidate requirements. Done before the completeness check so a role whose only
+  // "profile" content was boilerplate is correctly held for review, not shipped empty.
+  result.responsibilities = stripTrailingBoilerplate(result.responsibilities);
+  result.profile = stripTrailingBoilerplate(result.profile);
 
   result.complete = Boolean(result.overview) && result.responsibilities.length > 0 && result.profile.length > 0;
   return result;

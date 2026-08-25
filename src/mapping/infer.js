@@ -39,7 +39,11 @@ const PRACTICE_AREA_KEYWORDS = {
   "Regulatory & Compliance": ["regulatory", "compliance", "aml", "sanctions"],
   "Restructuring & Insolvency": ["restructuring", "insolvency", "bankruptcy", "distressed"],
   "Tax": ["tax", "vat", "transfer pricing"],
-  "TMT": ["tmt", "technology", "media", "telecom", "data protection", "fintech"],
+  // Fintech is checked BEFORE TMT so a fintech/virtual-asset role lands here, not TMT.
+  // Kept narrow ("payments"/"crypto" are too broad and would false-match) — Azara can
+  // set Practice Area explicitly in RecruitCRM to override any inference.
+  "Fintech": ["fintech", "virtual asset", "digital asset"],
+  "TMT": ["tmt", "technology", "media", "telecom", "data protection"],
   "Hospitality": ["hospitality", "hotels", "leisure", "f&b"],
 };
 
@@ -70,6 +74,9 @@ function matchKeyword(hay, keyword) {
 
 // seniority: title-driven. Order matters; more specific titles checked first.
 const SENIORITY_RULES = [
+  // Paralegal is a distinct, specific title checked first — a "Litigation Paralegal"
+  // must not fall through to a PQE band or another ladder rung.
+  { label: "Paralegal", test: (t) => /\bparalegal\b/.test(t) },
   { label: "General Counsel", test: (t) => /\bgeneral counsel\b|\bgc\b/.test(t) },
   { label: "Head of Legal", test: (t) => /\bhead of legal\b/.test(t) },
   { label: "Senior Legal Counsel", test: (t) => /\bsenior legal counsel\b/.test(t) },

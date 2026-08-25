@@ -100,6 +100,13 @@ Why 30 minutes: GitHub bills each scheduled run as at least one minute, so `*/30
 (about 1440 runs per month) stays inside a private repo's 2000 free minutes, while
 `*/15` would not. 30 minutes is within the brief's 15 to 30 minute window.
 
+**Reading the run annotations.** A hold is annotated as `job-id NN held on: field, field`.
+That `NN` is the **RecruitCRM `srNo`** — the number shown on the job in the RecruitCRM
+UI — **not** the internal API `id`. Look the role up in RecruitCRM by that number.
+Since 2026-08-25 a hold only **warns** (never fails the run); the separate daily
+`held-digest` workflow reports outstanding holds once a day. Only a hard per-job
+**failure** fails the run and emails.
+
 ### Repo settings Azara sets once (GitHub repo > Settings)
 
 - Actions **variable** `SYNC_URL` = the deployed endpoint, for example
