@@ -14,7 +14,7 @@
 //      The PDFs live in /assets, which Vercel does not serve, so the gated document is
 //      never reachable at a URL. Contact enquiries get the CRM record only.
 //
-// Security: the webhook URL carries ?secret=<WEBHOOK_SECRET>, same pattern as
+// Security: the webhook URL carries ?secret=<FORM_WEBHOOK_SECRET>, same pattern as
 // /api/recruitcrm-hook, and the submission is re-fetched from Webflow before anything
 // is written. Personal data never appears in a URL or a log line.
 
@@ -29,7 +29,7 @@ const CC_ADDRESS = process.env.CC_ADDRESS || "azaradigan@meyssalegal.com";
 
 // Which guide goes to whom. Decided by Azara, 10 Sept 2026.
 const GUIDES = {
-  candidate: "Meyssa_Salary_Market_Guide_Candidates_2026.pdf",
+  candidate: "Meyssa_Salary_Guide_Lawyers_2026.pdf",
   client_uae: "Meyssa_Salary_Guide_InHouse_2026.pdf",
   client_ksa: "Meyssa_Salary_Guide_InHouse_KSA_2026.pdf",
 };
@@ -46,7 +46,7 @@ export default async function handler(req, res) {
 
   const secret = process.env.FORM_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || process.env.SYNC_SECRET;
   if (!secret) {
-    log.error("webflow-form: no WEBHOOK_SECRET/SYNC_SECRET configured, refusing");
+    log.error("webflow-form: no FORM_WEBHOOK_SECRET configured, refusing");
     res.status(503).json({ error: "receiver not configured" });
     return;
   }
@@ -116,19 +116,20 @@ export default async function handler(req, res) {
       const file = GUIDES[key];
       const bytes = fs.readFileSync(path.join(process.cwd(), "assets", file));
       const isKsa = key === "client_ksa";
-      const docName = isKsa ? "Saudi Legal Salary Guide" : "UAE Legal Salary Survey";
+      const docName = key === "candidate"
+        ? "UAE Salary Guide for Lawyers 2026"
+        : isKsa ? "Saudi Arabia In-House Legal Salary Guide 2026" : "UAE In-House Legal Salary Guide 2026";
       const html =
         `<p>Dear ${escapeHtml(firstName)}</p>` +
-        `<p>Thank you for requesting our most recent ${docName}. Please find it attached.</p>` +
-        `<p>Should you require any further detail, our founder Azara Digan, in copy, would be happy to assist.</p>` +
+        `<p>As requested via our website, please find attached our latest copy of the ${docName}. I have CC'd our founder, Azara Digan. Please feel free to reach out should you require further assistance.</p>` +
         `<p>Kind regards</p>` +
-        (process.env.INFO_SIGNATURE_HTML || `<p>Meyssa Legal<br>info@meyssalegal.com | meyssalegal.com</p>`);
+        (process.env.INFO_SIGNATURE_HTML || `<p><b>Meyssa Legal</b></p><p><i>Meyssa Legal is a trading name of Meyssa Group L.L.C-FZ.</i></p>`);
 
       await graphSendMail({
         from: INFO_MAILBOX,
         to: email,
         cc: CC_ADDRESS,
-        subject: `Your copy of the Meyssa Legal ${docName} 2026`,
+        subject: `Your copy of the Meyssa Legal ${docName}`,
         html,
         attachment: { name: file, bytes },
       });
