@@ -44,7 +44,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const secret = process.env.WEBHOOK_SECRET || process.env.SYNC_SECRET;
+  const secret = process.env.FORM_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || process.env.SYNC_SECRET;
   if (!secret) {
     log.error("webflow-form: no WEBHOOK_SECRET/SYNC_SECRET configured, refusing");
     res.status(503).json({ error: "receiver not configured" });
