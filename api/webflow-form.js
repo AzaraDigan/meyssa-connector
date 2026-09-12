@@ -32,6 +32,7 @@ const GUIDES = {
   candidate: "Meyssa_Salary_Guide_Lawyers_2026.pdf",
   client_uae: "Meyssa_Salary_Guide_InHouse_2026.pdf",
   client_ksa: "Meyssa_Salary_Guide_InHouse_KSA_2026.pdf",
+  client_pp: "Meyssa_Salary_Guide_PrivatePractice_2026.pdf",
 };
 
 export default async function handler(req, res) {
@@ -88,6 +89,7 @@ export default async function handler(req, res) {
     }
 
     const isClient = /hiring/i.test(enquiryType);
+    const isLawFirm = /law firm|private practice/i.test(enquiryType);
     const [firstName, ...rest] = name.split(/\s+/);
     const lastName = rest.join(" ") || "-";
 
@@ -112,12 +114,12 @@ export default async function handler(req, res) {
     // 4. Salary survey: email the guide from the info box, Azara in CC.
     let emailed = false;
     if (isSurvey) {
-      const key = !isClient ? "candidate" : /saudi/i.test(market) ? "client_ksa" : "client_uae";
+      const key = !isClient ? "candidate" : isLawFirm ? "client_pp" : /saudi/i.test(market) ? "client_ksa" : "client_uae";
       const file = GUIDES[key];
       const bytes = fs.readFileSync(path.join(process.cwd(), "assets", file));
       const isKsa = key === "client_ksa";
-      const docName = key === "candidate"
-        ? "UAE Salary Guide for Lawyers 2026"
+      const docName = key === "candidate" ? "UAE Salary Guide for Lawyers 2026"
+        : key === "client_pp" ? "UAE Private Practice Salary Guide 2026"
         : isKsa ? "Saudi Arabia In-House Legal Salary Guide 2026" : "UAE In-House Legal Salary Guide 2026";
       const html =
         `<p>Dear ${escapeHtml(firstName)}</p>` +
