@@ -65,6 +65,11 @@ export default async function handler(req, res) {
       res.status(200).json({ ok: true, ...(await subscribe(base)) });
       return;
     }
+    if (req.method === "GET" && action === "preview") {
+      // Dry run: says what a real run would create, without writing to Zoho or Recruit CRM.
+      res.status(200).json({ ok: true, preview: true, ...(await reconcile({ dryRun: true })) });
+      return;
+    }
     if (req.method === "GET" && action === "check") {
       // Connectivity probe: proves the Zoho credentials work without writing anything.
       const org = await zohoGet("/organizations");
@@ -88,27 +93,41 @@ export default async function handler(req, res) {
 }
 
 // ---------- The reconcile ----------
-async function reconcile() {
+async function reconcile({ dryRun = false } = {}) {
   const deals = await listDeals();
-  const out = { deals: deals.length, won: 0, created: [], existing: [], skipped: [] };
+  const out = { deals: deals.length, won: 0, created: [], existing: [], skipped: [], failed: [] };
 
   for (const deal of deals) {
+    try {
+      await reconcileDeal(deal, out, dryRun);
+    } catch (err) {
+      // One bad deal must not stop the others.
+      out.failed.push({ ref: `RCRM-D${deal.id}`, deal: deal.name, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  log.info("zoho-finance reconcile", { dryRun, deals: out.deals, won: out.won, created: out.created.length, existing: out.existing.length, skipped: out.skipped.length, failed: out.failed.length });
+  return out;
+}
+
+async function reconcileDeal(deal, out, dryRun) {
+  {
     const stage = String(deal.deal_stage?.label ?? deal.deal_stage ?? "").trim();
-    if (!/^won$/i.test(stage)) continue;
+    if (!/^won$/i.test(stage)) return;
     out.won++;
     const ref = `RCRM-D${deal.id}`;
     const closeDate = (deal.close_date || "").slice(0, 10);
     const amount = Number(String(deal.deal_value ?? "0").replace(/[^0-9.]/g, "")) || 0;
     if (!amount) {
       out.skipped.push({ ref, reason: "deal value is empty" });
-      continue;
+      return;
     }
 
     const company = deal.company_slug ? await rcrm("GET", `/companies/${deal.company_slug}`).catch(() => null) : null;
     const companyName = (company?.company_name || company?.name || "").trim();
     if (!companyName) {
       out.skipped.push({ ref, reason: "no company on the deal" });
-      continue;
+      return;
     }
     const jobSlug = String(deal.additional_job_slugs || "").split(",")[0].trim();
     const candSlug = String(deal.additional_candidate_slugs || "").split(",")[0].trim();
@@ -124,10 +143,14 @@ async function reconcile() {
       : (await zohoGet(`/invoices?reference_number=${encodeURIComponent(ref)}`)).invoices?.find((i) => i.reference_number === ref);
     if (marked) {
       out.existing.push({ ref, zoho: marked.invoice_number || marked.recurrence_name, status: marked.status });
-      continue;
+      return;
     }
 
-    const customer = await findOrCreateCustomer(companyName);
+    const customer = await findOrCreateCustomer(companyName, dryRun);
+    if (!customer) {
+      out.created.push({ ref, preview: true, wouldCreateCustomer: companyName, [interim ? "monthly" : "amount"]: amount, interim });
+      return;
+    }
 
     // Raised by hand before this sync existed? Same customer, same amount: leave it.
     const byHand = interim
@@ -135,7 +158,7 @@ async function reconcile() {
       : (await zohoGet(`/invoices?customer_id=${customer.contact_id}`)).invoices?.find((i) => i.status !== "void" && sameAmount(i, amount));
     if (byHand) {
       out.skipped.push({ ref, reason: `${customer.contact_name} already has ${byHand.invoice_number || byHand.recurrence_name} for this amount (raised by hand)` });
-      continue;
+      return;
     }
 
     const line = {
@@ -149,6 +172,11 @@ async function reconcile() {
       rate: amount,
       quantity: 1,
     };
+
+    if (dryRun) {
+      out.created.push({ ref, preview: true, customer: customer.contact_name, customerExisted: true, [interim ? "monthly" : "amount"]: amount, interim, job: jobName });
+      return;
+    }
 
     if (interim) {
       // Interim assignments are billed on days actually worked, so the profile only
@@ -181,14 +209,13 @@ async function reconcile() {
       await dealNote(deal.slug, `<p><b>Zoho Books draft invoice created</b><br>Invoice ${escapeHtml(invoice.invoice_number)} for ${escapeHtml(invoice.currency_code || "AED")} ${amount.toLocaleString("en-GB")} against ${escapeHtml(customer.contact_name)}. Reference ${ref}. Sitting as a draft in Zoho Books for review.</p>`);
     }
   }
-
-  log.info("zoho-finance reconcile", { deals: out.deals, won: out.won, created: out.created.length, existing: out.existing.length, skipped: out.skipped.length });
-  return out;
 }
 
 function sameAmount(doc, amount) {
-  const vals = [doc.total, doc.sub_total, doc.balance].map((v) => Number(v)).filter((v) => !isNaN(v));
-  return vals.some((v) => Math.abs(v - amount) < 0.5);
+  // Zoho list rows carry the VAT-inclusive total, so a 40,000 fee shows as 42,000
+  // in the UAE. Match either the net or the 5% gross figure.
+  const vals = [doc.total, doc.sub_total].map((v) => Number(v)).filter((v) => !isNaN(v) && v > 0);
+  return vals.some((v) => Math.abs(v - amount) < 1 || Math.abs(v - amount * 1.05) < 1);
 }
 
 async function dealNote(slug, description) {
@@ -286,18 +313,25 @@ async function zoho(method, p, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || (typeof j.code === "number" && j.code !== 0)) throw new Error(`Zoho ${r.status} on ${p}: ${j.message || "unknown"}`);
+  if (!r.ok || (typeof j.code === "number" && j.code !== 0)) {
+    const msg = j.message || "unknown";
+    const hint = /Invoice Number field is blank/i.test(msg)
+      ? " (Zoho is not auto-numbering invoices. In Zoho Books open New Invoice, click the gear next to Invoice#, choose 'Continue auto-generating invoice numbers', set the prefix and next number to follow your sequence, Save.)"
+      : "";
+    throw new Error(`Zoho ${r.status} on ${p}: ${msg}${hint}`);
+  }
   return j;
 }
 const zohoGet = (p) => zoho("GET", p);
 const zohoPost = (p, b) => zoho("POST", p, b);
 
-async function findOrCreateCustomer(name) {
+async function findOrCreateCustomer(name, dryRun = false) {
   const found = await zohoGet(`/contacts?contact_type=customer&contact_name_contains=${encodeURIComponent(name)}`);
   const list = found.contacts || [];
   const exact = list.find((c) => norm(c.contact_name) === norm(name) || norm(c.company_name) === norm(name));
   if (exact) return exact;
   if (list.length === 1) return list[0];
+  if (dryRun) return null;
   const created = await zohoPost("/contacts", { contact_name: name, company_name: name, contact_type: "customer" });
   return created.contact;
 }
