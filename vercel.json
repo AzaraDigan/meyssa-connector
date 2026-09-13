@@ -1,9 +1,13 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "crons": [
-    {
-      "path": "/api/sync",
-      "schedule": "0 6 * * *"
-    }
-  ]
+"$schema": "https://openapi.vercel.sh/vercel.json",
+"crons": [
+{
+"path": "/api/sync",
+"schedule": "0 6 * * *"
+},
+{
+"path": "/api/zoho-finance",
+"schedule": "30 6 * * *"
+}
+]
 }
