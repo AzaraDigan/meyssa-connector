@@ -32,7 +32,8 @@
 // URLs or logs.
 //
 // Environment (Vercel): RECRUITCRM_API_TOKEN, FORM_WEBHOOK_SECRET, ZOHO_CLIENT_ID,
-// ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN, ZOHO_ORG_ID, ZOHO_DC (com|eu|in|au|sa|jp|ca).
+// ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN, ZOHO_ORG_ID, ZOHO_DC (com|eu|in|au|sa|jp|ca),
+// ZOHO_SYNC_SINCE (optional, YYYY-MM-DD; deals won before it were invoiced by hand).
 // Zoho Books > Settings > Preferences > Recurring Invoices should be set to create
 // invoices as DRAFTS, so an interim profile never sends anything by itself.
 
@@ -143,6 +144,13 @@ async function reconcileDeal(deal, out, dryRun) {
       : (await zohoGet(`/invoices?reference_number=${encodeURIComponent(ref)}`)).invoices?.find((i) => i.reference_number === ref);
     if (marked) {
       out.existing.push({ ref, zoho: marked.invoice_number || marked.recurrence_name, status: marked.status });
+      return;
+    }
+
+    // Won before the sync went live: invoiced by hand, leave it alone.
+    const since = process.env.ZOHO_SYNC_SINCE || "2026-09-13";
+    if (closeDate && closeDate < since) {
+      out.skipped.push({ ref, reason: `won ${fmtDate(closeDate)}, before the sync went live on ${fmtDate(since)}; invoiced by hand` });
       return;
     }
 
@@ -342,6 +350,7 @@ function configSummary() {
     zoho_dc: process.env.ZOHO_DC || "com",
     zoho_org_set: Boolean(process.env.ZOHO_ORG_ID),
     zoho_credentials_set: Boolean(process.env.ZOHO_CLIENT_ID && process.env.ZOHO_CLIENT_SECRET && process.env.ZOHO_REFRESH_TOKEN),
+    sync_since: process.env.ZOHO_SYNC_SINCE || "2026-09-13",
   };
 }
 const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
